@@ -137,12 +137,12 @@ public class DashboardActivity extends AppCompatActivity {
 
         btnAttendance.setOnClickListener(view -> {
 
-            Toast.makeText(
+            Intent intent = new Intent(
                     DashboardActivity.this,
-                    "Mark Attendance",
-                    Toast.LENGTH_SHORT
-            ).show();
+                    AttendanceActivity.class
+            );
 
+            startActivity(intent);
         });
 
 
