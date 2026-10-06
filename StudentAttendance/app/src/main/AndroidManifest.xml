@@ -22,9 +22,6 @@
             android:exported="false"
             android:windowSoftInputMode="adjustResize" />
 
-
-
-
         <!-- Main/Login Activity -->
         <activity
             android:name=".MainActivity"
@@ -42,6 +39,10 @@
             android:windowSoftInputMode="adjustResize" />
         <activity
             android:name=".AttendanceActivity"
+            android:exported="false"
+            android:windowSoftInputMode="adjustResize" />
+        <activity
+            android:name=".AttendanceRecord"
             android:exported="false"
             android:windowSoftInputMode="adjustResize" />
     </application>
