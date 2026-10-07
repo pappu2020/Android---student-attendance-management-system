@@ -2,106 +2,300 @@
 
 <LinearLayout
     xmlns:android="http://schemas.android.com/apk/res/android"
-    xmlns:app="http://schemas.android.com/apk/res-auto"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     android:orientation="vertical"
-    android:background="#F5F7FA">
+    android:background="#F5F7FB">
 
-    <!-- Header -->
+    <!-- ================================================= -->
+    <!-- TOP HEADER -->
+    <!-- ================================================= -->
 
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:orientation="vertical"
-        android:padding="20dp"
+        android:paddingStart="22dp"
+        android:paddingTop="24dp"
+        android:paddingEnd="22dp"
+        android:paddingBottom="22dp"
         android:background="#1565C0">
 
         <TextView
-            android:id="@+id/tvAttendanceTitle"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:text="MARK ATTENDANCE"
             android:textColor="@android:color/white"
-            android:textSize="22sp"
+            android:textSize="24sp"
             android:textStyle="bold"/>
 
         <TextView
-            android:id="@+id/tvAttendanceSubtitle"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginTop="5dp"
-            android:text="Select Present or Absent"
+            android:text="Take daily attendance quickly and easily"
             android:textColor="#E3F2FD"
             android:textSize="14sp"/>
 
     </LinearLayout>
 
 
-    <!-- Date Section -->
+    <!-- ================================================= -->
+    <!-- FILTER CARD -->
+    <!-- ================================================= -->
 
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:orientation="horizontal"
-        android:gravity="center_vertical"
-        android:padding="16dp">
+        android:layout_marginStart="14dp"
+        android:layout_marginTop="14dp"
+        android:layout_marginEnd="14dp"
+        android:padding="16dp"
+        android:orientation="vertical"
+        android:background="@drawable/bg_attendance_card">
+
+        <!-- CLASS -->
 
         <TextView
-            android:layout_width="wrap_content"
+            android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:text="Attendance Date:"
-            android:textSize="16sp"
-            android:textStyle="bold"
-            android:textColor="#222222"/>
+            android:text="CLASS"
+            android:textColor="#555555"
+            android:textSize="12sp"
+            android:textStyle="bold"/>
 
-        <Button
-            android:id="@+id/btnSelectDate"
-            android:layout_width="wrap_content"
+        <Spinner
+            android:id="@+id/spinnerClass"
+            android:layout_width="match_parent"
+            android:layout_height="50dp"
+            android:layout_marginTop="6dp"
+            android:background="@drawable/bg_spinner"/>
+
+
+        <!-- SECTION -->
+
+        <TextView
+            android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginStart="10dp"
-            android:text="SELECT DATE"/>
+            android:layout_marginTop="14dp"
+            android:text="SECTION"
+            android:textColor="#555555"
+            android:textSize="12sp"
+            android:textStyle="bold"/>
+
+        <Spinner
+            android:id="@+id/spinnerSection"
+            android:layout_width="match_parent"
+            android:layout_height="50dp"
+            android:layout_marginTop="6dp"
+            android:background="@drawable/bg_spinner"/>
+
+
+        <!-- DATE -->
+
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="14dp"
+            android:text="ATTENDANCE DATE"
+            android:textColor="#555555"
+            android:textSize="12sp"
+            android:textStyle="bold"/>
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="50dp"
+            android:layout_marginTop="6dp"
+            android:gravity="center_vertical"
+            android:orientation="horizontal"
+            android:paddingStart="14dp"
+            android:paddingEnd="8dp"
+            android:background="@drawable/bg_date_box">
+
+            <TextView
+                android:id="@+id/tvSelectedDate"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:text="07 October 2026"
+                android:textColor="#222222"
+                android:textSize="15sp"
+                android:textStyle="bold"/>
+
+            <Button
+                android:id="@+id/btnSelectDate"
+                android:layout_width="wrap_content"
+                android:layout_height="42dp"
+                android:text="CHANGE"
+                android:textSize="12sp"
+                android:textStyle="bold"/>
+
+        </LinearLayout>
 
     </LinearLayout>
 
 
-    <TextView
-        android:id="@+id/tvSelectedDate"
+    <!-- ================================================= -->
+    <!-- STUDENT COUNT / TITLE -->
+    <!-- ================================================= -->
+
+    <!-- ================================================= -->
+    <!-- ATTENDANCE SUMMARY -->
+    <!-- ================================================= -->
+
+    <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:paddingStart="16dp"
-        android:paddingEnd="16dp"
-        android:text="Date: Not Selected"
-        android:textSize="15sp"
-        android:textStyle="bold"
-        android:textColor="#1565C0"/>
+        android:layout_marginStart="14dp"
+        android:layout_marginTop="16dp"
+        android:layout_marginEnd="14dp"
+        android:orientation="vertical"
+        android:padding="16dp"
+        android:background="@drawable/bg_attendance_summary">
+
+        <!-- TOP ROW -->
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:gravity="center_vertical"
+            android:orientation="horizontal">
+
+            <TextView
+                android:id="@+id/tvStudentCount"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:text="0 Students"
+                android:textColor="#222222"
+                android:textSize="18sp"
+                android:textStyle="bold"/>
+
+            <TextView
+                android:id="@+id/tvAttendanceHint"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Class 10 • Section A"
+                android:textColor="#777777"
+                android:textSize="12sp"/>
+
+        </LinearLayout>
 
 
-    <!-- Student List -->
+        <!-- SUMMARY ROW -->
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="14dp"
+            android:orientation="horizontal">
+
+            <!-- PRESENT -->
+
+            <LinearLayout
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:orientation="vertical"
+                android:gravity="center">
+
+                <TextView
+                    android:id="@+id/tvPresentCount"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="0"
+                    android:textColor="#2E7D32"
+                    android:textSize="22sp"
+                    android:textStyle="bold"/>
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="Present"
+                    android:textColor="#666666"
+                    android:textSize="12sp"/>
+
+            </LinearLayout>
+
+
+            <!-- ABSENT -->
+
+            <LinearLayout
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:orientation="vertical"
+                android:gravity="center">
+
+                <TextView
+                    android:id="@+id/tvAbsentCount"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="0"
+                    android:textColor="#C62828"
+                    android:textSize="22sp"
+                    android:textStyle="bold"/>
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="Absent"
+                    android:textColor="#666666"
+                    android:textSize="12sp"/>
+
+            </LinearLayout>
+
+        </LinearLayout>
+
+    </LinearLayout>
+
+
+    <!-- ================================================= -->
+    <!-- STUDENT LIST -->
+    <!-- ================================================= -->
 
     <ScrollView
         android:layout_width="match_parent"
         android:layout_height="0dp"
         android:layout_weight="1"
-        android:padding="12dp">
+        android:layout_marginTop="8dp"
+        android:fillViewport="true">
 
         <LinearLayout
             android:id="@+id/llAttendanceList"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:orientation="vertical"/>
+            android:orientation="vertical"
+            android:paddingStart="14dp"
+            android:paddingEnd="14dp"
+            android:paddingBottom="10dp"/>
 
     </ScrollView>
 
 
-    <!-- Save Button -->
+    <!-- ================================================= -->
+    <!-- SAVE BUTTON -->
+    <!-- ================================================= -->
 
-    <Button
-        android:id="@+id/btnSaveAttendance"
+    <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:layout_margin="16dp"
-        android:text="SAVE ATTENDANCE"
-        android:textStyle="bold"/>
+        android:paddingStart="14dp"
+        android:paddingTop="10dp"
+        android:paddingEnd="14dp"
+        android:paddingBottom="14dp"
+        android:background="@android:color/white">
+
+        <Button
+            android:id="@+id/btnSaveAttendance"
+            android:layout_width="match_parent"
+            android:layout_height="54dp"
+            android:text="✓  SAVE ATTENDANCE"
+            android:textSize="15sp"
+            android:textStyle="bold"
+            android:textColor="@android:color/white"
+            android:backgroundTint="#1565C0"/>
+
+    </LinearLayout>
 
 </LinearLayout>

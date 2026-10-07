@@ -11,20 +11,36 @@ import androidx.appcompat.app.AppCompatActivity;
 
 public class DashboardActivity extends AppCompatActivity {
 
+    // =====================================================
     // Header TextViews
+    // =====================================================
+
     private TextView tvDashboardTitle;
     private TextView tvWelcome;
     private TextView tvRole;
 
+
+    // =====================================================
     // Dashboard Cards
+    // =====================================================
+
     private LinearLayout btnStudents;
+    private LinearLayout btnStudentList;
     private LinearLayout btnAttendance;
     private LinearLayout btnHistory;
     private LinearLayout btnReport;
 
+
+    // =====================================================
     // Logout Button
+    // =====================================================
+
     private Button btnLogout;
 
+
+    // =====================================================
+    // ON CREATE
+    // =====================================================
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -32,56 +48,93 @@ public class DashboardActivity extends AppCompatActivity {
         super.onCreate(savedInstanceState);
 
         // Connect XML layout
-        setContentView(R.layout.activity_dashboard);
+        setContentView(
+                R.layout.activity_dashboard
+        );
 
 
-        // ==========================================
+        // =================================================
         // Find Views
-        // ==========================================
+        // =================================================
 
         tvDashboardTitle =
-                findViewById(R.id.tvDashboardTitle);
+                findViewById(
+                        R.id.tvDashboardTitle
+                );
+
 
         tvWelcome =
-                findViewById(R.id.tvWelcome);
+                findViewById(
+                        R.id.tvWelcome
+                );
+
 
         tvRole =
-                findViewById(R.id.tvRole);
+                findViewById(
+                        R.id.tvRole
+                );
 
 
         btnStudents =
-                findViewById(R.id.btnStudents);
+                findViewById(
+                        R.id.btnStudents
+                );
+
+
+        btnStudentList =
+                findViewById(
+                        R.id.btnStudentList
+                );
+
 
         btnAttendance =
-                findViewById(R.id.btnAttendance);
+                findViewById(
+                        R.id.btnAttendance
+                );
+
 
         btnHistory =
-                findViewById(R.id.btnHistory);
+                findViewById(
+                        R.id.btnHistory
+                );
+
 
         btnReport =
-                findViewById(R.id.btnReport);
+                findViewById(
+                        R.id.btnReport
+                );
+
 
         btnLogout =
-                findViewById(R.id.btnLogout);
+                findViewById(
+                        R.id.btnLogout
+                );
 
 
-        // ==========================================
+        // =================================================
         // Get User Information from Login
-        // ==========================================
+        // =================================================
 
         String userName =
-                getIntent().getStringExtra("user_name");
+                getIntent().getStringExtra(
+                        "user_name"
+                );
+
 
         String userRole =
-                getIntent().getStringExtra("user_role");
+                getIntent().getStringExtra(
+                        "user_role"
+                );
 
 
-        // ==========================================
+        // =================================================
         // Display User Name
-        // ==========================================
+        // =================================================
 
-        if (userName != null &&
-                !userName.trim().isEmpty()) {
+        if (
+                userName != null
+                        && !userName.trim().isEmpty()
+        ) {
 
             tvWelcome.setText(
                     "Welcome, " + userName
@@ -95,12 +148,14 @@ public class DashboardActivity extends AppCompatActivity {
         }
 
 
-        // ==========================================
+        // =================================================
         // Display User Role
-        // ==========================================
+        // =================================================
 
-        if (userRole != null &&
-                !userRole.trim().isEmpty()) {
+        if (
+                userRole != null
+                        && !userRole.trim().isEmpty()
+        ) {
 
             tvRole.setText(
                     "Role: " + userRole
@@ -114,9 +169,9 @@ public class DashboardActivity extends AppCompatActivity {
         }
 
 
-        // ==========================================
-        // Manage Students
-        // ==========================================
+        // =================================================
+        // ADD STUDENT
+        // =================================================
 
         btnStudents.setOnClickListener(view -> {
 
@@ -131,24 +186,43 @@ public class DashboardActivity extends AppCompatActivity {
         });
 
 
-        // ==========================================
-        // Mark Attendance
-        // ==========================================
+        // =================================================
+        // STUDENT LIST
+        // =================================================
 
-        btnAttendance.setOnClickListener(view -> {
+        btnStudentList.setOnClickListener(view -> {
 
-            Intent intent = new Intent(
-                    DashboardActivity.this,
-                    AttendanceActivity.class
-            );
+            Intent intent =
+                    new Intent(
+                            DashboardActivity.this,
+                            StudentListActivity.class
+                    );
 
             startActivity(intent);
+
         });
 
 
-        // ==========================================
-        // Attendance History
-        // ==========================================
+        // =================================================
+        // MARK ATTENDANCE
+        // =================================================
+
+        btnAttendance.setOnClickListener(view -> {
+
+            Intent intent =
+                    new Intent(
+                            DashboardActivity.this,
+                            AttendanceActivity.class
+                    );
+
+            startActivity(intent);
+
+        });
+
+
+        // =================================================
+        // ATTENDANCE HISTORY
+        // =================================================
 
         btnHistory.setOnClickListener(view -> {
 
@@ -161,9 +235,9 @@ public class DashboardActivity extends AppCompatActivity {
         });
 
 
-        // ==========================================
-        // Attendance Report
-        // ==========================================
+        // =================================================
+        // ATTENDANCE REPORT
+        // =================================================
 
         btnReport.setOnClickListener(view -> {
 
@@ -176,9 +250,9 @@ public class DashboardActivity extends AppCompatActivity {
         });
 
 
-        // ==========================================
-        // Logout
-        // ==========================================
+        // =================================================
+        // LOGOUT
+        // =================================================
 
         btnLogout.setOnClickListener(view -> {
 
@@ -198,7 +272,8 @@ public class DashboardActivity extends AppCompatActivity {
 
             // Remove Dashboard from back stack
             intent.setFlags(
-                    Intent.FLAG_ACTIVITY_NEW_TASK |
+                    Intent.FLAG_ACTIVITY_NEW_TASK
+                            |
                             Intent.FLAG_ACTIVITY_CLEAR_TASK
             );
 
@@ -208,6 +283,5 @@ public class DashboardActivity extends AppCompatActivity {
             finish();
 
         });
-
     }
 }

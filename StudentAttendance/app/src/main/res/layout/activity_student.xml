@@ -1,366 +1,310 @@
-<?xml version="1.0" encoding="utf-8"?>
-
-<ScrollView
-    xmlns:android="http://schemas.android.com/apk/res/android"
+<ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:fillViewport="true"
-    android:background="#F4F6FA">
+    android:background="#F5F7FB"
+    android:fillViewport="true">
 
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:orientation="vertical"
-        android:padding="18dp">
+        android:padding="16dp">
 
-        <!-- ================================= -->
-        <!-- HEADER -->
-        <!-- ================================= -->
-
-        <LinearLayout
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:orientation="horizontal"
-            android:gravity="center_vertical"
-            android:paddingTop="4dp"
-            android:paddingBottom="12dp">
-
-            <TextView
-                android:layout_width="40dp"
-                android:layout_height="40dp"
-                android:gravity="center"
-                android:text="←"
-                android:textColor="#303F9F"
-                android:textSize="28sp"
-                android:textStyle="bold" />
-
-            <LinearLayout
-                android:layout_width="0dp"
-                android:layout_height="wrap_content"
-                android:layout_weight="1"
-                android:orientation="vertical"
-                android:layout_marginStart="4dp">
-
-                <TextView
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:text="Student Management"
-                    android:textColor="#202124"
-                    android:textSize="25sp"
-                    android:textStyle="bold" />
-
-                <TextView
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:layout_marginTop="2dp"
-                    android:text="Add and manage your students"
-                    android:textColor="#7A7A7A"
-                    android:textSize="13sp" />
-
-            </LinearLayout>
-
-        </LinearLayout>
-
-
-        <!-- ================================= -->
-        <!-- STUDENT FORM CARD -->
-        <!-- ================================= -->
+        <!-- ================================================= -->
+        <!-- Header -->
+        <!-- ================================================= -->
 
         <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:orientation="vertical"
-            android:padding="18dp"
-            android:background="#FFFFFF">
-
-            <!-- FORM TITLE -->
+            android:padding="22dp"
+            android:background="@drawable/bg_dashboard_header_new">
 
             <TextView
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:text="Student Information"
-                android:textColor="#202124"
-                android:textSize="19sp"
+                android:text="Student Management"
+                android:textColor="#FFFFFF"
+                android:textSize="26sp"
                 android:textStyle="bold" />
 
             <TextView
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:layout_marginTop="3dp"
-                android:text="Enter student details below"
-                android:textColor="#888888"
-                android:textSize="12sp" />
+                android:layout_marginTop="6dp"
+                android:text="Add or update student information"
+                android:textColor="#E3F2FD"
+                android:textSize="14sp" />
+
+        </LinearLayout>
 
 
-            <!-- ================================= -->
-            <!-- PHOTO AREA -->
-            <!-- ================================= -->
+        <!-- ================================================= -->
+        <!-- Student Form Card -->
+        <!-- ================================================= -->
 
-            <LinearLayout
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="18dp"
-                android:gravity="center"
-                android:orientation="vertical">
-
-                <ImageView
-                    android:id="@+id/ivStudentPhoto"
-                    android:layout_width="105dp"
-                    android:layout_height="105dp"
-                    android:background="#E8EAF6"
-                    android:contentDescription="Student Photo"
-                    android:padding="25dp"
-                    android:scaleType="centerInside"
-                    android:src="@android:drawable/ic_menu_camera" />
-
-                <TextView
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:layout_marginTop="8dp"
-                    android:text="Student Photo"
-                    android:textColor="#555555"
-                    android:textSize="13sp"
-                    android:textStyle="bold" />
-
-                <Button
-                    android:id="@+id/btnSelectPhoto"
-                    android:layout_width="wrap_content"
-                    android:layout_height="42dp"
-                    android:layout_marginTop="5dp"
-                    android:backgroundTint="#E8EAF6"
-                    android:text="CHANGE PHOTO"
-                    android:textColor="#303F9F"
-                    android:textSize="12sp"
-                    android:textStyle="bold" />
-
-            </LinearLayout>
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="16dp"
+            android:orientation="vertical"
+            android:padding="18dp"
+            android:background="@drawable/bg_student_filter">
 
 
-            <!-- ================================= -->
-            <!-- NAME -->
-            <!-- ================================= -->
+            <!-- Student Name -->
 
             <TextView
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:layout_marginTop="18dp"
                 android:text="Student Name"
-                android:textColor="#555555"
-                android:textSize="12sp"
+                android:textColor="#263238"
+                android:textSize="14sp"
                 android:textStyle="bold" />
 
             <EditText
                 android:id="@+id/etStudentName"
                 android:layout_width="match_parent"
                 android:layout_height="52dp"
-                android:layout_marginTop="5dp"
-                android:backgroundTint="#3F51B5"
-                android:hint="Enter full name"
+                android:layout_marginTop="7dp"
+                android:background="@drawable/bg_spinner"
+                android:hint="Enter student name"
                 android:inputType="textPersonName"
-                android:paddingStart="4dp"
-                android:paddingEnd="4dp"
-                android:singleLine="true"
+                android:paddingStart="14dp"
+                android:paddingEnd="14dp"
+                android:textColor="#263238"
+                android:textColorHint="#90A4AE"
                 android:textSize="15sp" />
 
 
-            <!-- ================================= -->
-            <!-- ROLL -->
-            <!-- ================================= -->
+            <!-- Roll Number -->
 
             <TextView
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:layout_marginTop="13dp"
+                android:layout_marginTop="16dp"
                 android:text="Roll Number"
-                android:textColor="#555555"
-                android:textSize="12sp"
+                android:textColor="#263238"
+                android:textSize="14sp"
                 android:textStyle="bold" />
 
             <EditText
                 android:id="@+id/etRollNumber"
                 android:layout_width="match_parent"
                 android:layout_height="52dp"
-                android:layout_marginTop="5dp"
-                android:backgroundTint="#3F51B5"
+                android:layout_marginTop="7dp"
+                android:background="@drawable/bg_spinner"
                 android:hint="Enter roll number"
                 android:inputType="text"
-                android:paddingStart="4dp"
-                android:paddingEnd="4dp"
-                android:singleLine="true"
+                android:paddingStart="14dp"
+                android:paddingEnd="14dp"
+                android:textColor="#263238"
+                android:textColorHint="#90A4AE"
                 android:textSize="15sp" />
 
 
-            <!-- ================================= -->
-            <!-- EMAIL -->
-            <!-- ================================= -->
+            <!-- ================================================= -->
+            <!-- Class -->
+            <!-- ================================================= -->
 
             <TextView
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:layout_marginTop="13dp"
-                android:text="Email Address"
-                android:textColor="#555555"
-                android:textSize="12sp"
+                android:layout_marginTop="16dp"
+                android:text="Class"
+                android:textColor="#263238"
+                android:textSize="14sp"
+                android:textStyle="bold" />
+
+            <Spinner
+                android:id="@+id/spinnerStudentClass"
+                android:layout_width="match_parent"
+                android:layout_height="52dp"
+                android:layout_marginTop="7dp"
+                android:background="@drawable/bg_spinner"
+                android:paddingStart="12dp"
+                android:paddingEnd="12dp" />
+
+
+            <!-- ================================================= -->
+            <!-- Section -->
+            <!-- ================================================= -->
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="16dp"
+                android:text="Section"
+                android:textColor="#263238"
+                android:textSize="14sp"
+                android:textStyle="bold" />
+
+            <Spinner
+                android:id="@+id/spinnerStudentSection"
+                android:layout_width="match_parent"
+                android:layout_height="52dp"
+                android:layout_marginTop="7dp"
+                android:background="@drawable/bg_spinner"
+                android:paddingStart="12dp"
+                android:paddingEnd="12dp" />
+
+
+            <!-- ================================================= -->
+            <!-- Email -->
+            <!-- ================================================= -->
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="16dp"
+                android:text="Email"
+                android:textColor="#263238"
+                android:textSize="14sp"
                 android:textStyle="bold" />
 
             <EditText
                 android:id="@+id/etStudentEmail"
                 android:layout_width="match_parent"
                 android:layout_height="52dp"
-                android:layout_marginTop="5dp"
-                android:backgroundTint="#3F51B5"
+                android:layout_marginTop="7dp"
+                android:background="@drawable/bg_spinner"
                 android:hint="Enter email address"
                 android:inputType="textEmailAddress"
-                android:paddingStart="4dp"
-                android:paddingEnd="4dp"
-                android:singleLine="true"
+                android:paddingStart="14dp"
+                android:paddingEnd="14dp"
+                android:textColor="#263238"
+                android:textColorHint="#90A4AE"
                 android:textSize="15sp" />
 
 
-            <!-- ================================= -->
-            <!-- PHONE -->
-            <!-- ================================= -->
+            <!-- ================================================= -->
+            <!-- Phone -->
+            <!-- ================================================= -->
 
             <TextView
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:layout_marginTop="13dp"
+                android:layout_marginTop="16dp"
                 android:text="Phone Number"
-                android:textColor="#555555"
-                android:textSize="12sp"
+                android:textColor="#263238"
+                android:textSize="14sp"
                 android:textStyle="bold" />
 
             <EditText
                 android:id="@+id/etStudentPhone"
                 android:layout_width="match_parent"
                 android:layout_height="52dp"
-                android:layout_marginTop="5dp"
-                android:backgroundTint="#3F51B5"
+                android:layout_marginTop="7dp"
+                android:background="@drawable/bg_spinner"
                 android:hint="Enter phone number"
                 android:inputType="phone"
-                android:paddingStart="4dp"
-                android:paddingEnd="4dp"
-                android:singleLine="true"
+                android:paddingStart="14dp"
+                android:paddingEnd="14dp"
+                android:textColor="#263238"
+                android:textColorHint="#90A4AE"
                 android:textSize="15sp" />
 
 
-            <!-- ================================= -->
-            <!-- ADD / UPDATE -->
-            <!-- ================================= -->
+            <!-- ================================================= -->
+            <!-- Photo Section -->
+            <!-- ================================================= -->
 
-            <Button
-                android:id="@+id/btnAddStudent"
-                android:layout_width="match_parent"
-                android:layout_height="54dp"
-                android:layout_marginTop="22dp"
-                android:backgroundTint="#3F51B5"
-                android:text="ADD STUDENT"
-                android:textColor="#FFFFFF"
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="18dp"
+                android:text="Student Photo"
+                android:textColor="#263238"
                 android:textSize="14sp"
                 android:textStyle="bold" />
 
-
-            <!-- ================================= -->
-            <!-- CANCEL EDIT -->
-            <!-- ================================= -->
+            <ImageView
+                android:id="@+id/ivStudentPhoto"
+                android:layout_width="110dp"
+                android:layout_height="110dp"
+                android:layout_gravity="center_horizontal"
+                android:layout_marginTop="12dp"
+                android:contentDescription="Student Photo"
+                android:scaleType="centerCrop"
+                android:src="@android:drawable/ic_menu_camera"
+                android:visibility="gone" />
 
             <Button
-                android:id="@+id/btnCancelEdit"
+                android:id="@+id/btnSelectPhoto"
                 android:layout_width="match_parent"
-                android:layout_height="48dp"
-                android:layout_marginTop="8dp"
-                android:backgroundTint="#757575"
-                android:text="CANCEL EDIT"
-                android:textColor="#FFFFFF"
-                android:textSize="13sp"
-                android:textStyle="bold"
-                android:visibility="gone" />
+                android:layout_height="50dp"
+                android:layout_marginTop="10dp"
+                android:text="SELECT PHOTO"
+                android:textAllCaps="false"
+                android:textColor="#1565C0"
+                android:textSize="15sp" />
 
 
-            <!-- ================================= -->
-            <!-- PROGRESS -->
-            <!-- ================================= -->
-
-            <ProgressBar
-                android:id="@+id/progressBar"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:layout_gravity="center"
-                android:layout_marginTop="12dp"
-                android:visibility="gone" />
-
-
-            <!-- ================================= -->
-            <!-- MESSAGE -->
-            <!-- ================================= -->
+            <!-- ================================================= -->
+            <!-- Message -->
+            <!-- ================================================= -->
 
             <TextView
                 android:id="@+id/tvMessage"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:layout_marginTop="10dp"
+                android:layout_marginTop="12dp"
                 android:gravity="center"
                 android:text=""
-                android:textSize="13sp"
+                android:textSize="14sp" />
+
+
+            <!-- ================================================= -->
+            <!-- Progress -->
+            <!-- ================================================= -->
+
+            <ProgressBar
+                android:id="@+id/progressBar"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_gravity="center_horizontal"
+                android:layout_marginTop="10dp"
+                android:visibility="gone" />
+
+
+            <!-- ================================================= -->
+            <!-- ADD / UPDATE BUTTON -->
+            <!-- ================================================= -->
+
+            <Button
+                android:id="@+id/btnAddStudent"
+                android:layout_width="match_parent"
+                android:layout_height="54dp"
+                android:layout_marginTop="18dp"
+                android:text="ADD STUDENT"
+                android:textAllCaps="false"
+                android:textSize="16sp"
                 android:textStyle="bold" />
 
-        </LinearLayout>
 
+            <!-- ================================================= -->
+            <!-- CANCEL EDIT -->
+            <!-- ================================================= -->
 
-        <!-- ================================= -->
-        <!-- STUDENT LIST HEADER -->
-        <!-- ================================= -->
-
-        <LinearLayout
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="22dp"
-            android:gravity="center_vertical"
-            android:orientation="horizontal">
-
-            <LinearLayout
-                android:layout_width="0dp"
-                android:layout_height="wrap_content"
-                android:layout_weight="1"
-                android:orientation="vertical">
-
-                <TextView
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:text="Student List"
-                    android:textColor="#202124"
-                    android:textSize="21sp"
-                    android:textStyle="bold" />
-
-                <TextView
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:layout_marginTop="2dp"
-                    android:text="All registered students"
-                    android:textColor="#888888"
-                    android:textSize="12sp" />
-
-            </LinearLayout>
+            <Button
+                android:id="@+id/btnCancelEdit"
+                android:layout_width="match_parent"
+                android:layout_height="50dp"
+                android:layout_marginTop="10dp"
+                android:text="CANCEL EDIT"
+                android:textAllCaps="false"
+                android:textSize="15sp"
+                android:visibility="gone" />
 
         </LinearLayout>
 
-
-        <!-- ================================= -->
-        <!-- DYNAMIC STUDENT LIST -->
-        <!-- ================================= -->
-
-        <LinearLayout
-            android:id="@+id/llStudentList"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="12dp"
-            android:orientation="vertical" />
 
         <!-- Bottom Space -->
 
-        <Space
+        <View
             android:layout_width="match_parent"
-            android:layout_height="25dp" />
+            android:layout_height="20dp" />
 
     </LinearLayout>
 

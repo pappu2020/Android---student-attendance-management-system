@@ -6,18 +6,17 @@ import android.net.Uri;
 import android.os.Bundle;
 import android.provider.MediaStore;
 import android.view.View;
+import android.widget.ArrayAdapter;
 import android.widget.Button;
 import android.widget.EditText;
 import android.widget.ImageView;
-import android.widget.LinearLayout;
 import android.widget.ProgressBar;
+import android.widget.Spinner;
 import android.widget.TextView;
 import android.widget.Toast;
 
-import androidx.appcompat.app.AlertDialog;
 import androidx.appcompat.app.AppCompatActivity;
 
-import org.json.JSONArray;
 import org.json.JSONObject;
 
 import java.io.BufferedReader;
@@ -39,14 +38,8 @@ public class StudentActivity extends AppCompatActivity {
     private static final String ADD_STUDENT_URL =
             "http://10.0.2.2/student_attendance_api/add_student.php";
 
-    private static final String GET_STUDENTS_URL =
-            "http://10.0.2.2/student_attendance_api/get_students.php";
-
     private static final String UPDATE_STUDENT_URL =
             "http://10.0.2.2/student_attendance_api/update_student.php";
-
-    private static final String DELETE_STUDENT_URL =
-            "http://10.0.2.2/student_attendance_api/delete_student.php";
 
     private static final String UPLOAD_PHOTO_URL =
             "http://10.0.2.2/student_attendance_api/upload_student_photo.php";
@@ -68,6 +61,9 @@ public class StudentActivity extends AppCompatActivity {
     private EditText etStudentEmail;
     private EditText etStudentPhone;
 
+    private Spinner spinnerStudentClass;
+    private Spinner spinnerStudentSection;
+
     private Button btnAddStudent;
     private Button btnCancelEdit;
     private Button btnSelectPhoto;
@@ -75,8 +71,6 @@ public class StudentActivity extends AppCompatActivity {
     private ProgressBar progressBar;
 
     private TextView tvMessage;
-
-    private LinearLayout llStudentList;
 
     private ImageView ivStudentPhoto;
 
@@ -110,9 +104,13 @@ public class StudentActivity extends AppCompatActivity {
 
         initializeViews();
 
+        setupClassSpinner();
+
+        setupSectionSpinner();
+
         setupButtons();
 
-        loadStudents();
+        checkEditMode();
     }
 
 
@@ -135,6 +133,13 @@ public class StudentActivity extends AppCompatActivity {
                 findViewById(R.id.etStudentPhone);
 
 
+        spinnerStudentClass =
+                findViewById(R.id.spinnerStudentClass);
+
+        spinnerStudentSection =
+                findViewById(R.id.spinnerStudentSection);
+
+
         btnAddStudent =
                 findViewById(R.id.btnAddStudent);
 
@@ -151,34 +156,103 @@ public class StudentActivity extends AppCompatActivity {
         tvMessage =
                 findViewById(R.id.tvMessage);
 
-
-        llStudentList =
-                findViewById(R.id.llStudentList);
-
         ivStudentPhoto =
                 findViewById(R.id.ivStudentPhoto);
 
 
-        // Initially hide cancel button
         btnCancelEdit.setVisibility(
                 View.GONE
         );
 
-
-        // Initially hide photo
         ivStudentPhoto.setVisibility(
+                View.GONE
+        );
+
+        progressBar.setVisibility(
                 View.GONE
         );
     }
 
 
     // =====================================================
-    // Setup Buttons
+    // CLASS SPINNER
+    // =====================================================
+
+    private void setupClassSpinner() {
+
+        String[] classList = {
+
+                "Select Class",
+                "Class 6",
+                "Class 7",
+                "Class 8",
+                "Class 9",
+                "Class 10",
+                "Class 11",
+                "Class 12"
+        };
+
+
+        ArrayAdapter<String> adapter =
+                new ArrayAdapter<>(
+                        this,
+                        android.R.layout.simple_spinner_item,
+                        classList
+                );
+
+
+        adapter.setDropDownViewResource(
+                android.R.layout.simple_spinner_dropdown_item
+        );
+
+
+        spinnerStudentClass.setAdapter(
+                adapter
+        );
+    }
+
+
+    // =====================================================
+    // SECTION SPINNER
+    // =====================================================
+
+    private void setupSectionSpinner() {
+
+        String[] sectionList = {
+
+                "Select Section",
+                "Section A",
+                "Section B",
+                "Section C",
+                "Section D"
+        };
+
+
+        ArrayAdapter<String> adapter =
+                new ArrayAdapter<>(
+                        this,
+                        android.R.layout.simple_spinner_item,
+                        sectionList
+                );
+
+
+        adapter.setDropDownViewResource(
+                android.R.layout.simple_spinner_dropdown_item
+        );
+
+
+        spinnerStudentSection.setAdapter(
+                adapter
+        );
+    }
+
+
+    // =====================================================
+    // BUTTONS
     // =====================================================
 
     private void setupButtons() {
 
-        // ADD / UPDATE
         btnAddStudent.setOnClickListener(
                 view -> {
 
@@ -194,7 +268,6 @@ public class StudentActivity extends AppCompatActivity {
         );
 
 
-        // CANCEL EDIT
         btnCancelEdit.setOnClickListener(
                 view -> {
 
@@ -204,7 +277,6 @@ public class StudentActivity extends AppCompatActivity {
         );
 
 
-        // SELECT PHOTO
         btnSelectPhoto.setOnClickListener(
                 view -> {
 
@@ -216,7 +288,232 @@ public class StudentActivity extends AppCompatActivity {
 
 
     // =====================================================
-    // Open Image Picker
+    // CHECK EDIT MODE
+    // =====================================================
+
+    private void checkEditMode() {
+
+        Intent intent = getIntent();
+
+        boolean editMode =
+                intent.getBooleanExtra(
+                        "edit_mode",
+                        false
+                );
+
+
+        if (!editMode) {
+
+            isEditMode = false;
+
+            editingStudentId = "";
+
+            btnAddStudent.setText(
+                    "ADD STUDENT"
+            );
+
+            btnCancelEdit.setVisibility(
+                    View.GONE
+            );
+
+            return;
+        }
+
+
+        isEditMode = true;
+
+
+        editingStudentId =
+                getStringExtraSafe(
+                        intent,
+                        "student_id"
+                );
+
+
+        String studentName =
+                getStringExtraSafe(
+                        intent,
+                        "student_name"
+                );
+
+
+        String studentRoll =
+                getStringExtraSafe(
+                        intent,
+                        "student_roll"
+                );
+
+
+        String studentEmail =
+                getStringExtraSafe(
+                        intent,
+                        "student_email"
+                );
+
+
+        String studentPhone =
+                getStringExtraSafe(
+                        intent,
+                        "student_phone"
+                );
+
+
+        String studentClass =
+                getStringExtraSafe(
+                        intent,
+                        "student_class"
+                );
+
+
+        String studentSection =
+                getStringExtraSafe(
+                        intent,
+                        "student_section"
+                );
+
+
+        // Fill fields
+
+        etStudentName.setText(
+                studentName
+        );
+
+
+        etRollNumber.setText(
+                studentRoll
+        );
+
+
+        etStudentEmail.setText(
+                studentEmail
+        );
+
+
+        etStudentPhone.setText(
+                studentPhone
+        );
+
+
+        // Select Class
+
+        selectSpinnerValue(
+                spinnerStudentClass,
+                studentClass
+        );
+
+
+        // Select Section
+
+        selectSpinnerValue(
+                spinnerStudentSection,
+                studentSection
+        );
+
+
+        btnAddStudent.setText(
+                "UPDATE STUDENT"
+        );
+
+
+        btnCancelEdit.setVisibility(
+                View.VISIBLE
+        );
+
+
+        tvMessage.setText(
+                "Editing Student ID: "
+                        + editingStudentId
+        );
+
+
+        tvMessage.setTextColor(
+                Color.rgb(
+                        33,
+                        150,
+                        243
+                )
+        );
+    }
+
+
+    // =====================================================
+    // Safe Intent Extra
+    // =====================================================
+
+    private String getStringExtraSafe(
+            Intent intent,
+            String key
+    ) {
+
+        String value =
+                intent.getStringExtra(
+                        key
+                );
+
+
+        if (value == null) {
+
+            return "";
+        }
+
+
+        return value;
+    }
+
+
+    // =====================================================
+    // SELECT SPINNER VALUE
+    // =====================================================
+
+    private void selectSpinnerValue(
+            Spinner spinner,
+            String value
+    ) {
+
+        if (
+                value == null ||
+                        value.trim().isEmpty()
+        ) {
+
+            return;
+        }
+
+
+        ArrayAdapter<?> adapter =
+                (ArrayAdapter<?>)
+                        spinner.getAdapter();
+
+
+        for (
+                int i = 0;
+                i < adapter.getCount();
+                i++
+        ) {
+
+            Object item =
+                    adapter.getItem(i);
+
+
+            if (
+                    item != null &&
+                            item.toString()
+                                    .equalsIgnoreCase(
+                                            value
+                                    )
+            ) {
+
+                spinner.setSelection(
+                        i
+                );
+
+                break;
+            }
+        }
+    }
+
+
+    // =====================================================
+    // OPEN IMAGE PICKER
     // =====================================================
 
     private void openImagePicker() {
@@ -227,7 +524,11 @@ public class StudentActivity extends AppCompatActivity {
                         MediaStore.Images.Media.EXTERNAL_CONTENT_URI
                 );
 
-        intent.setType("image/*");
+
+        intent.setType(
+                "image/*"
+        );
+
 
         startActivityForResult(
                 intent,
@@ -248,17 +549,20 @@ public class StudentActivity extends AppCompatActivity {
                         .toString()
                         .trim();
 
+
         String rollNumber =
                 etRollNumber
                         .getText()
                         .toString()
                         .trim();
 
+
         String email =
                 etStudentEmail
                         .getText()
                         .toString()
                         .trim();
+
 
         String phone =
                 etStudentPhone
@@ -267,7 +571,24 @@ public class StudentActivity extends AppCompatActivity {
                         .trim();
 
 
-        // Validation
+        String className =
+                spinnerStudentClass
+                        .getSelectedItem()
+                        .toString()
+                        .trim();
+
+
+        String section =
+                spinnerStudentSection
+                        .getSelectedItem()
+                        .toString()
+                        .trim();
+
+
+        // =================================================
+        // VALIDATION
+        // =================================================
+
         if (name.isEmpty()) {
 
             etStudentName.setError(
@@ -292,12 +613,46 @@ public class StudentActivity extends AppCompatActivity {
         }
 
 
+        if (
+                className.equals(
+                        "Select Class"
+                )
+        ) {
+
+            Toast.makeText(
+                    this,
+                    "Please select class",
+                    Toast.LENGTH_SHORT
+            ).show();
+
+            return;
+        }
+
+
+        if (
+                section.equals(
+                        "Select Section"
+                )
+        ) {
+
+            Toast.makeText(
+                    this,
+                    "Please select section",
+                    Toast.LENGTH_SHORT
+            ).show();
+
+            return;
+        }
+
+
         setLoading(true);
 
 
         new Thread(() -> {
 
-            HttpURLConnection connection = null;
+            HttpURLConnection connection =
+                    null;
+
 
             try {
 
@@ -305,6 +660,7 @@ public class StudentActivity extends AppCompatActivity {
                         new URL(
                                 ADD_STUDENT_URL
                         );
+
 
                 connection =
                         (HttpURLConnection)
@@ -315,7 +671,10 @@ public class StudentActivity extends AppCompatActivity {
                         "POST"
                 );
 
-                connection.setDoOutput(true);
+
+                connection.setDoOutput(
+                        true
+                );
 
 
                 connection.setRequestProperty(
@@ -325,6 +684,7 @@ public class StudentActivity extends AppCompatActivity {
 
 
                 String postData =
+
                         "name=" +
                                 URLEncoder.encode(
                                         name,
@@ -334,6 +694,18 @@ public class StudentActivity extends AppCompatActivity {
                                 + "&roll_number=" +
                                 URLEncoder.encode(
                                         rollNumber,
+                                        "UTF-8"
+                                )
+
+                                + "&class_name=" +
+                                URLEncoder.encode(
+                                        className,
+                                        "UTF-8"
+                                )
+
+                                + "&section=" +
+                                URLEncoder.encode(
+                                        section,
                                         "UTF-8"
                                 )
 
@@ -367,35 +739,44 @@ public class StudentActivity extends AppCompatActivity {
 
 
                 String response =
-                        readResponse(connection);
+                        readResponse(
+                                connection
+                        );
 
 
                 JSONObject json =
-                        new JSONObject(response);
+                        new JSONObject(
+                                response
+                        );
 
 
                 boolean success =
-                        json.getBoolean(
-                                "success"
+                        json.optBoolean(
+                                "success",
+                                false
                         );
 
 
                 String message =
-                        json.getString(
-                                "message"
+                        json.optString(
+                                "message",
+                                "Unknown server response"
                         );
 
 
                 if (success) {
 
                     String studentId =
-                            json.getString(
-                                    "student_id"
+                            json.optString(
+                                    "student_id",
+                                    ""
                             );
 
 
-                    // Photo selected?
-                    if (selectedImageUri != null) {
+                    if (
+                            selectedImageUri != null &&
+                                    !studentId.isEmpty()
+                    ) {
 
                         uploadStudentPhoto(
                                 studentId,
@@ -406,38 +787,34 @@ public class StudentActivity extends AppCompatActivity {
 
                         runOnUiThread(() -> {
 
-                            setLoading(false);
+                            setLoading(
+                                    false
+                            );
+
 
                             Toast.makeText(
                                     StudentActivity.this,
-                                    message,
+                                    "Student added successfully",
                                     Toast.LENGTH_SHORT
                             ).show();
 
-                            clearForm();
 
-                            loadStudents();
+                            clearForm();
 
                         });
                     }
-
 
                 } else {
 
                     runOnUiThread(() -> {
 
-                        setLoading(false);
-
-                        tvMessage.setText(
-                                message
+                        setLoading(
+                                false
                         );
 
-                        tvMessage.setTextColor(
-                                Color.rgb(
-                                        211,
-                                        47,
-                                        47
-                                )
+
+                        showError(
+                                message
                         );
                     });
                 }
@@ -447,19 +824,14 @@ public class StudentActivity extends AppCompatActivity {
 
                 runOnUiThread(() -> {
 
-                    setLoading(false);
-
-                    tvMessage.setText(
-                            "Add student error: "
-                                    + e.getMessage()
+                    setLoading(
+                            false
                     );
 
-                    tvMessage.setTextColor(
-                            Color.rgb(
-                                    211,
-                                    47,
-                                    47
-                            )
+
+                    showError(
+                            "Add student error: "
+                                    + e.getMessage()
                     );
                 });
 
@@ -488,17 +860,20 @@ public class StudentActivity extends AppCompatActivity {
                         .toString()
                         .trim();
 
+
         String rollNumber =
                 etRollNumber
                         .getText()
                         .toString()
                         .trim();
 
+
         String email =
                 etStudentEmail
                         .getText()
                         .toString()
                         .trim();
+
 
         String phone =
                 etStudentPhone
@@ -507,7 +882,24 @@ public class StudentActivity extends AppCompatActivity {
                         .trim();
 
 
-        // Validation
+        String className =
+                spinnerStudentClass
+                        .getSelectedItem()
+                        .toString()
+                        .trim();
+
+
+        String section =
+                spinnerStudentSection
+                        .getSelectedItem()
+                        .toString()
+                        .trim();
+
+
+        // =================================================
+        // VALIDATION
+        // =================================================
+
         if (name.isEmpty()) {
 
             etStudentName.setError(
@@ -532,7 +924,42 @@ public class StudentActivity extends AppCompatActivity {
         }
 
 
-        if (editingStudentId.isEmpty()) {
+        if (
+                className.equals(
+                        "Select Class"
+                )
+        ) {
+
+            Toast.makeText(
+                    this,
+                    "Please select class",
+                    Toast.LENGTH_SHORT
+            ).show();
+
+            return;
+        }
+
+
+        if (
+                section.equals(
+                        "Select Section"
+                )
+        ) {
+
+            Toast.makeText(
+                    this,
+                    "Please select section",
+                    Toast.LENGTH_SHORT
+            ).show();
+
+            return;
+        }
+
+
+        if (
+                editingStudentId == null ||
+                        editingStudentId.isEmpty()
+        ) {
 
             Toast.makeText(
                     this,
@@ -549,7 +976,9 @@ public class StudentActivity extends AppCompatActivity {
 
         new Thread(() -> {
 
-            HttpURLConnection connection = null;
+            HttpURLConnection connection =
+                    null;
+
 
             try {
 
@@ -568,7 +997,10 @@ public class StudentActivity extends AppCompatActivity {
                         "POST"
                 );
 
-                connection.setDoOutput(true);
+
+                connection.setDoOutput(
+                        true
+                );
 
 
                 connection.setRequestProperty(
@@ -578,6 +1010,7 @@ public class StudentActivity extends AppCompatActivity {
 
 
                 String postData =
+
                         "id=" +
                                 URLEncoder.encode(
                                         editingStudentId,
@@ -593,6 +1026,18 @@ public class StudentActivity extends AppCompatActivity {
                                 + "&roll_number=" +
                                 URLEncoder.encode(
                                         rollNumber,
+                                        "UTF-8"
+                                )
+
+                                + "&class_name=" +
+                                URLEncoder.encode(
+                                        className,
+                                        "UTF-8"
+                                )
+
+                                + "&section=" +
+                                URLEncoder.encode(
+                                        section,
                                         "UTF-8"
                                 )
 
@@ -626,56 +1071,53 @@ public class StudentActivity extends AppCompatActivity {
 
 
                 String response =
-                        readResponse(connection);
+                        readResponse(
+                                connection
+                        );
 
 
                 JSONObject json =
-                        new JSONObject(response);
+                        new JSONObject(
+                                response
+                        );
 
 
                 boolean success =
-                        json.getBoolean(
-                                "success"
+                        json.optBoolean(
+                                "success",
+                                false
                         );
 
 
                 String message =
-                        json.getString(
-                                "message"
+                        json.optString(
+                                "message",
+                                "Unknown server response"
                         );
 
 
                 runOnUiThread(() -> {
 
-                    setLoading(false);
+                    setLoading(
+                            false
+                    );
 
 
                     if (success) {
 
                         Toast.makeText(
                                 StudentActivity.this,
-                                message,
+                                "Student updated successfully",
                                 Toast.LENGTH_SHORT
                         ).show();
 
 
                         exitEditMode();
 
-                        loadStudents();
-
-
                     } else {
 
-                        tvMessage.setText(
+                        showError(
                                 message
-                        );
-
-                        tvMessage.setTextColor(
-                                Color.rgb(
-                                        211,
-                                        47,
-                                        47
-                                )
                         );
                     }
 
@@ -686,212 +1128,14 @@ public class StudentActivity extends AppCompatActivity {
 
                 runOnUiThread(() -> {
 
-                    setLoading(false);
+                    setLoading(
+                            false
+                    );
 
-                    tvMessage.setText(
+
+                    showError(
                             "Update error: "
                                     + e.getMessage()
-                    );
-
-                    tvMessage.setTextColor(
-                            Color.rgb(
-                                    211,
-                                    47,
-                                    47
-                            )
-                    );
-                });
-
-
-            } finally {
-
-                if (connection != null) {
-
-                    connection.disconnect();
-                }
-            }
-
-        }).start();
-    }
-
-
-    // =====================================================
-    // DELETE STUDENT - CONFIRMATION
-    // =====================================================
-
-    private void deleteStudent(
-            String studentId
-    ) {
-
-        new AlertDialog.Builder(this)
-
-                .setTitle(
-                        "Delete Student"
-                )
-
-                .setMessage(
-                        "Are you sure you want to delete this student?"
-                )
-
-                .setPositiveButton(
-                        "YES",
-                        (dialog, which) -> {
-
-                            performDeleteStudent(
-                                    studentId
-                            );
-
-                        }
-                )
-
-                .setNegativeButton(
-                        "NO",
-                        null
-                )
-
-                .show();
-    }
-
-
-    // =====================================================
-    // PERFORM DELETE
-    // =====================================================
-
-    private void performDeleteStudent(
-            String studentId
-    ) {
-
-        setLoading(true);
-
-
-        new Thread(() -> {
-
-            HttpURLConnection connection = null;
-
-            try {
-
-                URL url =
-                        new URL(
-                                DELETE_STUDENT_URL
-                        );
-
-
-                connection =
-                        (HttpURLConnection)
-                                url.openConnection();
-
-
-                connection.setRequestMethod(
-                        "POST"
-                );
-
-                connection.setDoOutput(true);
-
-
-                connection.setRequestProperty(
-                        "Content-Type",
-                        "application/x-www-form-urlencoded"
-                );
-
-
-                String postData =
-                        "id=" +
-                                URLEncoder.encode(
-                                        studentId,
-                                        "UTF-8"
-                                );
-
-
-                OutputStream outputStream =
-                        connection.getOutputStream();
-
-
-                outputStream.write(
-                        postData.getBytes(
-                                StandardCharsets.UTF_8
-                        )
-                );
-
-
-                outputStream.flush();
-
-                outputStream.close();
-
-
-                String response =
-                        readResponse(connection);
-
-
-                JSONObject json =
-                        new JSONObject(response);
-
-
-                boolean success =
-                        json.getBoolean(
-                                "success"
-                        );
-
-
-                String message =
-                        json.getString(
-                                "message"
-                        );
-
-
-                runOnUiThread(() -> {
-
-                    setLoading(false);
-
-
-                    if (success) {
-
-                        Toast.makeText(
-                                StudentActivity.this,
-                                message,
-                                Toast.LENGTH_SHORT
-                        ).show();
-
-
-                        loadStudents();
-
-
-                    } else {
-
-                        tvMessage.setText(
-                                message
-                        );
-
-                        tvMessage.setTextColor(
-                                Color.rgb(
-                                        211,
-                                        47,
-                                        47
-                                )
-                        );
-                    }
-
-                });
-
-
-            } catch (Exception e) {
-
-                runOnUiThread(() -> {
-
-                    setLoading(false);
-
-
-                    tvMessage.setText(
-                            "Delete error: "
-                                    + e.getMessage()
-                    );
-
-
-                    tvMessage.setTextColor(
-                            Color.rgb(
-                                    211,
-                                    47,
-                                    47
-                            )
                     );
                 });
 
@@ -919,7 +1163,8 @@ public class StudentActivity extends AppCompatActivity {
 
         new Thread(() -> {
 
-            HttpURLConnection connection = null;
+            HttpURLConnection connection =
+                    null;
 
 
             String boundary =
@@ -944,9 +1189,15 @@ public class StudentActivity extends AppCompatActivity {
                         "POST"
                 );
 
-                connection.setDoOutput(true);
 
-                connection.setUseCaches(false);
+                connection.setDoOutput(
+                        true
+                );
+
+
+                connection.setUseCaches(
+                        false
+                );
 
 
                 connection.setRequestProperty(
@@ -962,7 +1213,6 @@ public class StudentActivity extends AppCompatActivity {
                         );
 
 
-                // Student ID
                 writeFormField(
                         outputStream,
                         boundary,
@@ -971,7 +1221,6 @@ public class StudentActivity extends AppCompatActivity {
                 );
 
 
-                // Photo
                 writeFileField(
                         outputStream,
                         boundary,
@@ -993,28 +1242,36 @@ public class StudentActivity extends AppCompatActivity {
 
 
                 String response =
-                        readResponse(connection);
+                        readResponse(
+                                connection
+                        );
 
 
                 JSONObject json =
-                        new JSONObject(response);
+                        new JSONObject(
+                                response
+                        );
 
 
                 boolean success =
-                        json.getBoolean(
-                                "success"
+                        json.optBoolean(
+                                "success",
+                                false
                         );
 
 
                 String message =
-                        json.getString(
-                                "message"
+                        json.optString(
+                                "message",
+                                "Photo upload failed"
                         );
 
 
                 runOnUiThread(() -> {
 
-                    setLoading(false);
+                    setLoading(
+                            false
+                    );
 
 
                     if (success) {
@@ -1028,25 +1285,12 @@ public class StudentActivity extends AppCompatActivity {
 
                         clearForm();
 
-                        loadStudents();
-
-
                     } else {
 
-                        tvMessage.setText(
+                        showError(
                                 message
                         );
-
-
-                        tvMessage.setTextColor(
-                                Color.rgb(
-                                        211,
-                                        47,
-                                        47
-                                )
-                        );
                     }
-
                 });
 
 
@@ -1054,21 +1298,14 @@ public class StudentActivity extends AppCompatActivity {
 
                 runOnUiThread(() -> {
 
-                    setLoading(false);
-
-
-                    tvMessage.setText(
-                            "Photo upload error: "
-                                    + e.getMessage()
+                    setLoading(
+                            false
                     );
 
 
-                    tvMessage.setTextColor(
-                            Color.rgb(
-                                    211,
-                                    47,
-                                    47
-                            )
+                    showError(
+                            "Photo upload error: "
+                                    + e.getMessage()
                     );
                 });
 
@@ -1086,7 +1323,7 @@ public class StudentActivity extends AppCompatActivity {
 
 
     // =====================================================
-    // Multipart Form Field
+    // WRITE MULTIPART FORM FIELD
     // =====================================================
 
     private void writeFormField(
@@ -1118,7 +1355,7 @@ public class StudentActivity extends AppCompatActivity {
 
 
     // =====================================================
-    // Multipart File Field
+    // WRITE MULTIPART FILE FIELD
     // =====================================================
 
     private void writeFileField(
@@ -1199,599 +1436,6 @@ public class StudentActivity extends AppCompatActivity {
 
 
     // =====================================================
-    // GET STUDENTS
-    // =====================================================
-
-    private void loadStudents() {
-
-        setLoading(true);
-
-
-        new Thread(() -> {
-
-            HttpURLConnection connection = null;
-
-
-            try {
-
-                URL url =
-                        new URL(
-                                GET_STUDENTS_URL
-                        );
-
-
-                connection =
-                        (HttpURLConnection)
-                                url.openConnection();
-
-
-                connection.setRequestMethod(
-                        "GET"
-                );
-
-
-                String response =
-                        readResponse(connection);
-
-
-                JSONObject json =
-                        new JSONObject(
-                                response
-                        );
-
-
-                boolean success =
-                        json.getBoolean(
-                                "success"
-                        );
-
-
-                if (success) {
-
-                    JSONArray students =
-                            json.getJSONArray(
-                                    "students"
-                            );
-
-
-                    runOnUiThread(() -> {
-
-                        setLoading(false);
-
-                        displayStudents(
-                                students
-                        );
-                    });
-
-
-                } else {
-
-                    String message =
-                            json.getString(
-                                    "message"
-                            );
-
-
-                    runOnUiThread(() -> {
-
-                        setLoading(false);
-
-                        tvMessage.setText(
-                                message
-                        );
-
-                        tvMessage.setTextColor(
-                                Color.rgb(
-                                        211,
-                                        47,
-                                        47
-                                )
-                        );
-                    });
-                }
-
-
-            } catch (Exception e) {
-
-                runOnUiThread(() -> {
-
-                    setLoading(false);
-
-
-                    tvMessage.setText(
-                            "Load students error: "
-                                    + e.getMessage()
-                    );
-
-
-                    tvMessage.setTextColor(
-                            Color.rgb(
-                                    211,
-                                    47,
-                                    47
-                            )
-                    );
-                });
-
-
-            } finally {
-
-                if (connection != null) {
-
-                    connection.disconnect();
-                }
-            }
-
-        }).start();
-    }
-
-
-    // =====================================================
-    // DISPLAY STUDENTS
-    // =====================================================
-
-    private void displayStudents(
-            JSONArray students
-    ) {
-
-        llStudentList.removeAllViews();
-
-
-        if (students.length() == 0) {
-
-            TextView emptyText =
-                    new TextView(this);
-
-
-            emptyText.setText(
-                    "No students found"
-            );
-
-
-            emptyText.setTextSize(
-                    16
-            );
-
-
-            emptyText.setTextColor(
-                    Color.DKGRAY
-            );
-
-
-            emptyText.setPadding(
-                    20,
-                    20,
-                    20,
-                    20
-            );
-
-
-            llStudentList.addView(
-                    emptyText
-            );
-
-
-            return;
-        }
-
-
-        try {
-
-            for (
-                    int i = 0;
-                    i < students.length();
-                    i++
-            ) {
-
-                JSONObject student =
-                        students.getJSONObject(
-                                i
-                        );
-
-
-                String id =
-                        student.getString(
-                                "id"
-                        );
-
-
-                String name =
-                        student.getString(
-                                "name"
-                        );
-
-
-                String rollNumber =
-                        student.getString(
-                                "roll_number"
-                        );
-
-
-                String email =
-                        student.optString(
-                                "email",
-                                ""
-                        );
-
-
-                String phone =
-                        student.optString(
-                                "phone",
-                                ""
-                        );
-
-
-                // =================================================
-                // Student Card
-                // =================================================
-
-                LinearLayout cardLayout =
-                        new LinearLayout(this);
-
-
-                cardLayout.setOrientation(
-                        LinearLayout.VERTICAL
-                );
-
-
-                cardLayout.setPadding(
-                        30,
-                        25,
-                        30,
-                        25
-                );
-
-
-                // =================================================
-                // Student Name
-                // =================================================
-
-                TextView tvName =
-                        new TextView(this);
-
-
-                tvName.setText(
-                        "Name: "
-                                + name
-                );
-
-
-                tvName.setTextSize(
-                        18
-                );
-
-
-                tvName.setTextColor(
-                        Color.BLACK
-                );
-
-
-                // =================================================
-                // Roll Number
-                // =================================================
-
-                TextView tvRoll =
-                        new TextView(this);
-
-
-                tvRoll.setText(
-                        "Roll: "
-                                + rollNumber
-                );
-
-
-                tvRoll.setTextSize(
-                        16
-                );
-
-
-                // =================================================
-                // Email
-                // =================================================
-
-                TextView tvEmail =
-                        new TextView(this);
-
-
-                tvEmail.setText(
-                        "Email: "
-                                + (
-                                email.isEmpty()
-                                        ? "N/A"
-                                        : email
-                        )
-                );
-
-
-                tvEmail.setTextSize(
-                        15
-                );
-
-
-                // =================================================
-                // Phone
-                // =================================================
-
-                TextView tvPhone =
-                        new TextView(this);
-
-
-                tvPhone.setText(
-                        "Phone: "
-                                + (
-                                phone.isEmpty()
-                                        ? "N/A"
-                                        : phone
-                        )
-                );
-
-
-                tvPhone.setTextSize(
-                        15
-                );
-
-
-                // =================================================
-                // Student ID
-                // =================================================
-
-                TextView tvId =
-                        new TextView(this);
-
-
-                tvId.setText(
-                        "Student ID: "
-                                + id
-                );
-
-
-                tvId.setTextSize(
-                        14
-                );
-
-
-                tvId.setTextColor(
-                        Color.GRAY
-                );
-
-
-                // =================================================
-                // Button Layout
-                // =================================================
-
-                LinearLayout buttonLayout =
-                        new LinearLayout(this);
-
-
-                buttonLayout.setOrientation(
-                        LinearLayout.HORIZONTAL
-                );
-
-
-                // =================================================
-                // EDIT BUTTON
-                // =================================================
-
-                Button btnEdit =
-                        new Button(this);
-
-
-                btnEdit.setText(
-                        "EDIT"
-                );
-
-
-                LinearLayout.LayoutParams
-                        editParams =
-                        new LinearLayout.LayoutParams(
-                                0,
-                                LinearLayout.LayoutParams.WRAP_CONTENT,
-                                1
-                        );
-
-
-                btnEdit.setLayoutParams(
-                        editParams
-                );
-
-
-                btnEdit.setOnClickListener(
-                        view -> {
-
-                            editStudent(
-                                    id,
-                                    name,
-                                    rollNumber,
-                                    email,
-                                    phone
-                            );
-
-                        }
-                );
-
-
-                buttonLayout.addView(
-                        btnEdit
-                );
-
-
-                // =================================================
-                // DELETE BUTTON
-                // =================================================
-
-                Button btnDelete =
-                        new Button(this);
-
-
-                btnDelete.setText(
-                        "DELETE"
-                );
-
-
-                LinearLayout.LayoutParams
-                        deleteParams =
-                        new LinearLayout.LayoutParams(
-                                0,
-                                LinearLayout.LayoutParams.WRAP_CONTENT,
-                                1
-                        );
-
-
-                btnDelete.setLayoutParams(
-                        deleteParams
-                );
-
-
-                btnDelete.setOnClickListener(
-                        view -> {
-
-                            deleteStudent(
-                                    id
-                            );
-
-                        }
-                );
-
-
-                buttonLayout.addView(
-                        btnDelete
-                );
-
-
-                // =================================================
-                // Add All Views to Card
-                // =================================================
-
-                cardLayout.addView(
-                        tvName
-                );
-
-
-                cardLayout.addView(
-                        tvRoll
-                );
-
-
-                cardLayout.addView(
-                        tvEmail
-                );
-
-
-                cardLayout.addView(
-                        tvPhone
-                );
-
-
-                cardLayout.addView(
-                        tvId
-                );
-
-
-                cardLayout.addView(
-                        buttonLayout
-                );
-
-
-                // =================================================
-                // Add Card to List
-                // =================================================
-
-                llStudentList.addView(
-                        cardLayout
-                );
-            }
-
-
-        } catch (Exception e) {
-
-            tvMessage.setText(
-                    "Display error: "
-                            + e.getMessage()
-            );
-
-
-            tvMessage.setTextColor(
-                    Color.rgb(
-                            211,
-                            47,
-                            47
-                    )
-            );
-        }
-    }
-
-
-    // =====================================================
-    // EDIT STUDENT
-    // =====================================================
-
-    private void editStudent(
-            String id,
-            String name,
-            String rollNumber,
-            String email,
-            String phone
-    ) {
-
-        isEditMode = true;
-
-        editingStudentId = id;
-
-
-        // Fill form
-        etStudentName.setText(
-                name
-        );
-
-
-        etRollNumber.setText(
-                rollNumber
-        );
-
-
-        etStudentEmail.setText(
-                email
-        );
-
-
-        etStudentPhone.setText(
-                phone
-        );
-
-
-        // Change button
-        btnAddStudent.setText(
-                "UPDATE STUDENT"
-        );
-
-
-        // Show cancel
-        btnCancelEdit.setVisibility(
-                View.VISIBLE
-        );
-
-
-        // Message
-        tvMessage.setText(
-                "Editing Student ID: "
-                        + id
-        );
-
-
-        tvMessage.setTextColor(
-                Color.rgb(
-                        33,
-                        150,
-                        243
-                )
-        );
-
-
-        etStudentName.requestFocus();
-    }
-
-
-    // =====================================================
     // EXIT EDIT MODE
     // =====================================================
 
@@ -1832,6 +1476,16 @@ public class StudentActivity extends AppCompatActivity {
         etStudentEmail.setText("");
 
         etStudentPhone.setText("");
+
+
+        spinnerStudentClass.setSelection(
+                0
+        );
+
+
+        spinnerStudentSection.setSelection(
+                0
+        );
 
 
         selectedImageUri = null;
@@ -1875,6 +1529,10 @@ public class StudentActivity extends AppCompatActivity {
                 );
 
 
+                btnCancelEdit.setEnabled(
+                        false
+                );
+
             } else {
 
                 progressBar.setVisibility(
@@ -1890,8 +1548,36 @@ public class StudentActivity extends AppCompatActivity {
                 btnSelectPhoto.setEnabled(
                         true
                 );
+
+
+                btnCancelEdit.setEnabled(
+                        true
+                );
             }
         });
+    }
+
+
+    // =====================================================
+    // SHOW ERROR
+    // =====================================================
+
+    private void showError(
+            String message
+    ) {
+
+        tvMessage.setText(
+                message
+        );
+
+
+        tvMessage.setTextColor(
+                Color.rgb(
+                        211,
+                        47,
+                        47
+                )
+        );
     }
 
 
@@ -1911,8 +1597,8 @@ public class StudentActivity extends AppCompatActivity {
 
 
         if (
-                responseCode >= 200
-                        && responseCode < 300
+                responseCode >= 200 &&
+                        responseCode < 300
         ) {
 
             inputStream =
@@ -1985,9 +1671,9 @@ public class StudentActivity extends AppCompatActivity {
 
 
         if (
-                requestCode == PICK_IMAGE_REQUEST
-                        && resultCode == RESULT_OK
-                        && data != null
+                requestCode == PICK_IMAGE_REQUEST &&
+                        resultCode == RESULT_OK &&
+                        data != null
         ) {
 
             selectedImageUri =
