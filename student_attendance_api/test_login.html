@@ -1,0 +1,120 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+
+    <meta charset="UTF-8">
+
+    <title>Student Attendance Login API Test</title>
+
+    <style>
+
+        body {
+            font-family: Arial, sans-serif;
+            margin: 40px;
+        }
+
+        input {
+            display: block;
+            width: 300px;
+            padding: 12px;
+            margin: 10px 0;
+            font-size: 16px;
+        }
+
+        button {
+            padding: 12px 25px;
+            font-size: 16px;
+            cursor: pointer;
+        }
+
+        pre {
+            background: #f4f4f4;
+            padding: 20px;
+            margin-top: 20px;
+        }
+
+    </style>
+
+</head>
+
+<body>
+
+    <h1>Student Attendance Login API Test</h1>
+
+    <input
+        type="email"
+        id="email"
+        placeholder="Enter email"
+        value="admin@gmail.com"
+    >
+
+    <input
+        type="password"
+        id="password"
+        placeholder="Enter password"
+        value="admin123"
+    >
+
+    <button onclick="testLogin()">
+        Test Login
+    </button>
+
+    <pre id="result">Response will appear here...</pre>
+
+
+    <script>
+
+        function testLogin() {
+
+            const email =
+                document.getElementById("email").value;
+
+            const password =
+                document.getElementById("password").value;
+
+            const result =
+                document.getElementById("result");
+
+            const formData = new URLSearchParams();
+
+            formData.append("email", email);
+
+            formData.append("password", password);
+
+
+            fetch("login.php", {
+
+                method: "POST",
+
+                headers: {
+                    "Content-Type":
+                        "application/x-www-form-urlencoded"
+                },
+
+                body: formData
+
+            })
+
+            .then(response => response.text())
+
+            .then(data => {
+
+                result.textContent = data;
+
+            })
+
+            .catch(error => {
+
+                result.textContent =
+                    "Error: " + error;
+
+            });
+
+        }
+
+    </script>
+
+</body>
+
+</html>

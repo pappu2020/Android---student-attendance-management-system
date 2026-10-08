@@ -1,5 +1,6 @@
 package com.example.studentattendance;
 
+import android.app.Activity;
 import android.content.Intent;
 import android.graphics.Color;
 import android.net.Uri;
@@ -15,25 +16,31 @@ import android.widget.Spinner;
 import android.widget.TextView;
 import android.widget.Toast;
 
+import androidx.annotation.Nullable;
 import androidx.appcompat.app.AppCompatActivity;
 
+import com.android.volley.Request;
+import com.android.volley.RequestQueue;
+import com.android.volley.toolbox.StringRequest;
+import com.android.volley.toolbox.Volley;
+
+import org.json.JSONException;
 import org.json.JSONObject;
 
-import java.io.BufferedReader;
-import java.io.DataOutputStream;
+import java.io.ByteArrayOutputStream;
+import java.io.IOException;
 import java.io.InputStream;
-import java.io.InputStreamReader;
 import java.io.OutputStream;
 import java.net.HttpURLConnection;
 import java.net.URL;
-import java.net.URLEncoder;
-import java.nio.charset.StandardCharsets;
+import java.util.HashMap;
+import java.util.Map;
 
 public class StudentActivity extends AppCompatActivity {
 
-    // =====================================================
+    // =========================================================
     // API URLs
-    // =====================================================
+    // =========================================================
 
     private static final String ADD_STUDENT_URL =
             "http://10.0.2.2/student_attendance_api/add_student.php";
@@ -45,16 +52,9 @@ public class StudentActivity extends AppCompatActivity {
             "http://10.0.2.2/student_attendance_api/upload_student_photo.php";
 
 
-    // =====================================================
-    // Image Picker
-    // =====================================================
-
-    private static final int PICK_IMAGE_REQUEST = 1001;
-
-
-    // =====================================================
-    // UI Variables
-    // =====================================================
+    // =========================================================
+    // UI COMPONENTS
+    // =========================================================
 
     private EditText etStudentName;
     private EditText etRollNumber;
@@ -75,25 +75,20 @@ public class StudentActivity extends AppCompatActivity {
     private ImageView ivStudentPhoto;
 
 
-    // =====================================================
-    // Edit Variables
-    // =====================================================
+    // =========================================================
+    // EDIT MODE VARIABLES
+    // =========================================================
 
     private boolean isEditMode = false;
 
     private String editingStudentId = "";
 
-
-    // =====================================================
-    // Selected Photo
-    // =====================================================
-
     private Uri selectedImageUri = null;
 
 
-    // =====================================================
-    // onCreate
-    // =====================================================
+    // =========================================================
+    // ON CREATE
+    // =========================================================
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -102,23 +97,10 @@ public class StudentActivity extends AppCompatActivity {
 
         setContentView(R.layout.activity_student);
 
-        initializeViews();
 
-        setupClassSpinner();
-
-        setupSectionSpinner();
-
-        setupButtons();
-
-        checkEditMode();
-    }
-
-
-    // =====================================================
-    // Initialize Views
-    // =====================================================
-
-    private void initializeViews() {
+        // -----------------------------------------------------
+        // Initialize Views
+        // -----------------------------------------------------
 
         etStudentName =
                 findViewById(R.id.etStudentName);
@@ -132,13 +114,11 @@ public class StudentActivity extends AppCompatActivity {
         etStudentPhone =
                 findViewById(R.id.etStudentPhone);
 
-
         spinnerStudentClass =
                 findViewById(R.id.spinnerStudentClass);
 
         spinnerStudentSection =
                 findViewById(R.id.spinnerStudentSection);
-
 
         btnAddStudent =
                 findViewById(R.id.btnAddStudent);
@@ -148,7 +128,6 @@ public class StudentActivity extends AppCompatActivity {
 
         btnSelectPhoto =
                 findViewById(R.id.btnSelectPhoto);
-
 
         progressBar =
                 findViewById(R.id.progressBar);
@@ -160,29 +139,75 @@ public class StudentActivity extends AppCompatActivity {
                 findViewById(R.id.ivStudentPhoto);
 
 
-        btnCancelEdit.setVisibility(
-                View.GONE
-        );
+        // -----------------------------------------------------
+        // Setup Spinners
+        // -----------------------------------------------------
 
-        ivStudentPhoto.setVisibility(
-                View.GONE
-        );
+        setupClassSpinner();
 
-        progressBar.setVisibility(
-                View.GONE
-        );
+        setupSectionSpinner();
+
+
+        // -----------------------------------------------------
+        // Check Add/Edit Mode
+        // -----------------------------------------------------
+
+        checkEditMode();
+
+
+        // -----------------------------------------------------
+        // Add / Update Button
+        // -----------------------------------------------------
+
+        btnAddStudent.setOnClickListener(v -> {
+
+            if (isEditMode) {
+
+                updateStudent();
+
+            } else {
+
+                addStudent();
+
+            }
+
+        });
+
+
+        // -----------------------------------------------------
+        // Cancel Button
+        // -----------------------------------------------------
+
+        btnCancelEdit.setOnClickListener(v -> {
+
+            finish();
+
+        });
+
+
+        // -----------------------------------------------------
+        // Select Photo Button
+        // -----------------------------------------------------
+
+        btnSelectPhoto.setOnClickListener(v -> {
+
+            selectPhoto();
+
+        });
+
     }
 
 
-    // =====================================================
+    // =========================================================
     // CLASS SPINNER
-    // =====================================================
+    // =========================================================
 
     private void setupClassSpinner() {
 
-        String[] classList = {
+        String[] classes = {
 
                 "Select Class",
+
                 "Class 6",
                 "Class 7",
                 "Class 8",
@@ -190,6 +215,7 @@ public class StudentActivity extends AppCompatActivity {
                 "Class 10",
                 "Class 11",
                 "Class 12"
+
         };
 
 
@@ -197,7 +223,7 @@ public class StudentActivity extends AppCompatActivity {
                 new ArrayAdapter<>(
                         this,
                         android.R.layout.simple_spinner_item,
-                        classList
+                        classes
                 );
 
 
@@ -206,25 +232,26 @@ public class StudentActivity extends AppCompatActivity {
         );
 
 
-        spinnerStudentClass.setAdapter(
-                adapter
-        );
+        spinnerStudentClass.setAdapter(adapter);
+
     }
 
 
-    // =====================================================
+    // =========================================================
     // SECTION SPINNER
-    // =====================================================
+    // =========================================================
 
     private void setupSectionSpinner() {
 
-        String[] sectionList = {
+        String[] sections = {
 
                 "Select Section",
+
                 "Section A",
                 "Section B",
                 "Section C",
                 "Section D"
+
         };
 
 
@@ -232,7 +259,7 @@ public class StudentActivity extends AppCompatActivity {
                 new ArrayAdapter<>(
                         this,
                         android.R.layout.simple_spinner_item,
-                        sectionList
+                        sections
                 );
 
 
@@ -241,282 +268,782 @@ public class StudentActivity extends AppCompatActivity {
         );
 
 
-        spinnerStudentSection.setAdapter(
-                adapter
-        );
+        spinnerStudentSection.setAdapter(adapter);
+
     }
 
 
-    // =====================================================
-    // BUTTONS
-    // =====================================================
-
-    private void setupButtons() {
-
-        btnAddStudent.setOnClickListener(
-                view -> {
-
-                    if (isEditMode) {
-
-                        updateStudent();
-
-                    } else {
-
-                        addStudent();
-                    }
-                }
-        );
-
-
-        btnCancelEdit.setOnClickListener(
-                view -> {
-
-                    exitEditMode();
-
-                }
-        );
-
-
-        btnSelectPhoto.setOnClickListener(
-                view -> {
-
-                    openImagePicker();
-
-                }
-        );
-    }
-
-
-    // =====================================================
+    // =========================================================
     // CHECK EDIT MODE
-    // =====================================================
+    // =========================================================
 
     private void checkEditMode() {
 
         Intent intent = getIntent();
 
-        boolean editMode =
+
+        isEditMode =
                 intent.getBooleanExtra(
                         "edit_mode",
                         false
                 );
 
 
-        if (!editMode) {
+        // =====================================================
+        // EDIT MODE
+        // =====================================================
 
-            isEditMode = false;
+        if (isEditMode) {
 
-            editingStudentId = "";
+            editingStudentId =
+                    intent.getStringExtra(
+                            "student_id"
+                    );
+
+
+            String studentName =
+                    intent.getStringExtra(
+                            "student_name"
+                    );
+
+
+            String studentRoll =
+                    intent.getStringExtra(
+                            "student_roll"
+                    );
+
+
+            String studentClass =
+                    intent.getStringExtra(
+                            "student_class"
+                    );
+
+
+            String studentSection =
+                    intent.getStringExtra(
+                            "student_section"
+                    );
+
+
+            String studentEmail =
+                    intent.getStringExtra(
+                            "student_email"
+                    );
+
+
+            String studentPhone =
+                    intent.getStringExtra(
+                            "student_phone"
+                    );
+
+
+            // -------------------------------------------------
+            // Fill Existing Data
+            // -------------------------------------------------
+
+            if (studentName != null) {
+
+                etStudentName.setText(
+                        studentName
+                );
+
+            }
+
+
+            if (studentRoll != null) {
+
+                etRollNumber.setText(
+                        studentRoll
+                );
+
+            }
+
+
+            if (studentEmail != null) {
+
+                etStudentEmail.setText(
+                        studentEmail
+                );
+
+            }
+
+
+            if (studentPhone != null) {
+
+                etStudentPhone.setText(
+                        studentPhone
+                );
+
+            }
+
+
+            // -------------------------------------------------
+            // Set Class
+            // -------------------------------------------------
+
+            setSpinnerValue(
+                    spinnerStudentClass,
+                    studentClass
+            );
+
+
+            // -------------------------------------------------
+            // Set Section
+            // -------------------------------------------------
+
+            setSpinnerValue(
+                    spinnerStudentSection,
+                    studentSection
+            );
+
+
+            // -------------------------------------------------
+            // Update Button Text
+            // -------------------------------------------------
+
+            btnAddStudent.setText(
+                    "UPDATE STUDENT"
+            );
+
+
+            btnCancelEdit.setVisibility(
+                    View.VISIBLE
+            );
+
+
+        }
+
+        // =====================================================
+        // ADD MODE
+        // =====================================================
+
+        else {
 
             btnAddStudent.setText(
                     "ADD STUDENT"
             );
 
+
             btnCancelEdit.setVisibility(
                     View.GONE
             );
 
-            return;
         }
 
-
-        isEditMode = true;
-
-
-        editingStudentId =
-                getStringExtraSafe(
-                        intent,
-                        "student_id"
-                );
-
-
-        String studentName =
-                getStringExtraSafe(
-                        intent,
-                        "student_name"
-                );
-
-
-        String studentRoll =
-                getStringExtraSafe(
-                        intent,
-                        "student_roll"
-                );
-
-
-        String studentEmail =
-                getStringExtraSafe(
-                        intent,
-                        "student_email"
-                );
-
-
-        String studentPhone =
-                getStringExtraSafe(
-                        intent,
-                        "student_phone"
-                );
-
-
-        String studentClass =
-                getStringExtraSafe(
-                        intent,
-                        "student_class"
-                );
-
-
-        String studentSection =
-                getStringExtraSafe(
-                        intent,
-                        "student_section"
-                );
-
-
-        // Fill fields
-
-        etStudentName.setText(
-                studentName
-        );
-
-
-        etRollNumber.setText(
-                studentRoll
-        );
-
-
-        etStudentEmail.setText(
-                studentEmail
-        );
-
-
-        etStudentPhone.setText(
-                studentPhone
-        );
-
-
-        // Select Class
-
-        selectSpinnerValue(
-                spinnerStudentClass,
-                studentClass
-        );
-
-
-        // Select Section
-
-        selectSpinnerValue(
-                spinnerStudentSection,
-                studentSection
-        );
-
-
-        btnAddStudent.setText(
-                "UPDATE STUDENT"
-        );
-
-
-        btnCancelEdit.setVisibility(
-                View.VISIBLE
-        );
-
-
-        tvMessage.setText(
-                "Editing Student ID: "
-                        + editingStudentId
-        );
-
-
-        tvMessage.setTextColor(
-                Color.rgb(
-                        33,
-                        150,
-                        243
-                )
-        );
     }
 
 
-    // =====================================================
-    // Safe Intent Extra
-    // =====================================================
+    // =========================================================
+    // SET SPINNER VALUE
+    // =========================================================
 
-    private String getStringExtraSafe(
-            Intent intent,
-            String key
-    ) {
-
-        String value =
-                intent.getStringExtra(
-                        key
-                );
-
-
-        if (value == null) {
-
-            return "";
-        }
-
-
-        return value;
-    }
-
-
-    // =====================================================
-    // SELECT SPINNER VALUE
-    // =====================================================
-
-    private void selectSpinnerValue(
+    private void setSpinnerValue(
             Spinner spinner,
             String value
     ) {
 
-        if (
-                value == null ||
-                        value.trim().isEmpty()
-        ) {
+        if (value == null ||
+                value.trim().isEmpty()) {
 
             return;
+
         }
 
 
         ArrayAdapter<?> adapter =
-                (ArrayAdapter<?>)
-                        spinner.getAdapter();
+                (ArrayAdapter<?>) spinner.getAdapter();
 
 
-        for (
-                int i = 0;
-                i < adapter.getCount();
-                i++
-        ) {
+        for (int i = 0;
+             i < adapter.getCount();
+             i++) {
 
             Object item =
                     adapter.getItem(i);
 
 
-            if (
-                    item != null &&
-                            item.toString()
-                                    .equalsIgnoreCase(
-                                            value
-                                    )
-            ) {
+            if (item != null &&
+                    item.toString()
+                            .equalsIgnoreCase(
+                                    value
+                            )) {
 
-                spinner.setSelection(
-                        i
-                );
+                spinner.setSelection(i);
 
                 break;
+
             }
+
         }
+
     }
 
 
-    // =====================================================
-    // OPEN IMAGE PICKER
-    // =====================================================
+    // =========================================================
+    // ADD STUDENT
+    // =========================================================
 
-    private void openImagePicker() {
+    private void addStudent() {
+
+        String name =
+                etStudentName
+                        .getText()
+                        .toString()
+                        .trim();
+
+
+        String roll =
+                etRollNumber
+                        .getText()
+                        .toString()
+                        .trim();
+
+
+        String email =
+                etStudentEmail
+                        .getText()
+                        .toString()
+                        .trim();
+
+
+        String phone =
+                etStudentPhone
+                        .getText()
+                        .toString()
+                        .trim();
+
+
+        String className =
+                spinnerStudentClass
+                        .getSelectedItem()
+                        .toString();
+
+
+        String section =
+                spinnerStudentSection
+                        .getSelectedItem()
+                        .toString();
+
+
+        // -----------------------------------------------------
+        // Validation
+        // -----------------------------------------------------
+
+        if (name.isEmpty()) {
+
+            showError(
+                    "Please enter student name"
+            );
+
+            return;
+
+        }
+
+
+        if (roll.isEmpty()) {
+
+            showError(
+                    "Please enter roll number"
+            );
+
+            return;
+
+        }
+
+
+        if (className.equals(
+                "Select Class"
+        )) {
+
+            showError(
+                    "Please select class"
+            );
+
+            return;
+
+        }
+
+
+        if (section.equals(
+                "Select Section"
+        )) {
+
+            showError(
+                    "Please select section"
+            );
+
+            return;
+
+        }
+
+
+        setLoading(true);
+
+
+        // -----------------------------------------------------
+        // Volley Request
+        // -----------------------------------------------------
+
+        StringRequest request =
+                new StringRequest(
+                        Request.Method.POST,
+                        ADD_STUDENT_URL,
+
+                        response -> {
+
+                            setLoading(false);
+
+
+                            try {
+
+                                JSONObject json =
+                                        new JSONObject(
+                                                response
+                                        );
+
+
+                                boolean success =
+                                        json.getBoolean(
+                                                "success"
+                                        );
+
+
+                                String message =
+                                        json.getString(
+                                                "message"
+                                        );
+
+
+                                if (success) {
+
+                                    String studentId =
+                                            json.getString(
+                                                    "student_id"
+                                            );
+
+
+                                    // ---------------------------------
+                                    // Upload Photo if Selected
+                                    // ---------------------------------
+
+                                    if (selectedImageUri != null) {
+
+                                        uploadStudentPhoto(
+                                                studentId,
+                                                selectedImageUri,
+                                                false
+                                        );
+
+                                    } else {
+
+                                        Toast.makeText(
+                                                StudentActivity.this,
+                                                "Student added successfully",
+                                                Toast.LENGTH_LONG
+                                        ).show();
+
+
+                                        finish();
+
+                                    }
+
+                                } else {
+
+                                    showError(
+                                            message
+                                    );
+
+                                }
+
+                            } catch (JSONException e) {
+
+                                showError(
+                                        "Invalid server response"
+                                );
+
+                            }
+
+                        },
+
+                        error -> {
+
+                            setLoading(false);
+
+
+                            String errorMessage =
+                                    error.getMessage();
+
+
+                            if (errorMessage == null) {
+
+                                errorMessage =
+                                        "Unable to connect to server";
+
+                            }
+
+
+                            showError(
+                                    "Network error: "
+                                            + errorMessage
+                            );
+
+                        }
+
+                ) {
+
+                    @Override
+                    protected Map<String, String>
+                    getParams() {
+
+                        Map<String, String> params =
+                                new HashMap<>();
+
+
+                        params.put(
+                                "name",
+                                name
+                        );
+
+
+                        params.put(
+                                "roll_number",
+                                roll
+                        );
+
+
+                        params.put(
+                                "class_name",
+                                className
+                        );
+
+
+                        params.put(
+                                "section",
+                                section
+                        );
+
+
+                        params.put(
+                                "email",
+                                email
+                        );
+
+
+                        params.put(
+                                "phone",
+                                phone
+                        );
+
+
+                        return params;
+
+                    }
+
+                };
+
+
+        RequestQueue queue =
+                Volley.newRequestQueue(
+                        StudentActivity.this
+                );
+
+
+        queue.add(request);
+
+    }
+
+
+    // =========================================================
+    // UPDATE STUDENT
+    // =========================================================
+
+    private void updateStudent() {
+
+        String name =
+                etStudentName
+                        .getText()
+                        .toString()
+                        .trim();
+
+
+        String roll =
+                etRollNumber
+                        .getText()
+                        .toString()
+                        .trim();
+
+
+        String email =
+                etStudentEmail
+                        .getText()
+                        .toString()
+                        .trim();
+
+
+        String phone =
+                etStudentPhone
+                        .getText()
+                        .toString()
+                        .trim();
+
+
+        String className =
+                spinnerStudentClass
+                        .getSelectedItem()
+                        .toString();
+
+
+        String section =
+                spinnerStudentSection
+                        .getSelectedItem()
+                        .toString();
+
+
+        // -----------------------------------------------------
+        // Validation
+        // -----------------------------------------------------
+
+        if (editingStudentId == null ||
+                editingStudentId.isEmpty()) {
+
+            showError(
+                    "Student ID is missing"
+            );
+
+            return;
+
+        }
+
+
+        if (name.isEmpty()) {
+
+            showError(
+                    "Please enter student name"
+            );
+
+            return;
+
+        }
+
+
+        if (roll.isEmpty()) {
+
+            showError(
+                    "Please enter roll number"
+            );
+
+            return;
+
+        }
+
+
+        if (className.equals(
+                "Select Class"
+        )) {
+
+            showError(
+                    "Please select class"
+            );
+
+            return;
+
+        }
+
+
+        if (section.equals(
+                "Select Section"
+        )) {
+
+            showError(
+                    "Please select section"
+            );
+
+            return;
+
+        }
+
+
+        setLoading(true);
+
+
+        // -----------------------------------------------------
+        // Volley Request
+        // -----------------------------------------------------
+
+        StringRequest request =
+                new StringRequest(
+                        Request.Method.POST,
+                        UPDATE_STUDENT_URL,
+
+                        response -> {
+
+                            setLoading(false);
+
+
+                            try {
+
+                                JSONObject json =
+                                        new JSONObject(
+                                                response
+                                        );
+
+
+                                boolean success =
+                                        json.getBoolean(
+                                                "success"
+                                        );
+
+
+                                String message =
+                                        json.getString(
+                                                "message"
+                                        );
+
+
+                                if (success) {
+
+                                    // ---------------------------------
+                                    // Upload New Photo if Selected
+                                    // ---------------------------------
+
+                                    if (selectedImageUri != null) {
+
+                                        uploadStudentPhoto(
+                                                editingStudentId,
+                                                selectedImageUri,
+                                                true
+                                        );
+
+                                    } else {
+
+                                        Toast.makeText(
+                                                StudentActivity.this,
+                                                "Student updated successfully",
+                                                Toast.LENGTH_LONG
+                                        ).show();
+
+
+                                        finish();
+
+                                    }
+
+                                } else {
+
+                                    showError(
+                                            message
+                                    );
+
+                                }
+
+                            } catch (JSONException e) {
+
+                                showError(
+                                        "Invalid server response"
+                                );
+
+                            }
+
+                        },
+
+                        error -> {
+
+                            setLoading(false);
+
+
+                            String errorMessage =
+                                    error.getMessage();
+
+
+                            if (errorMessage == null) {
+
+                                errorMessage =
+                                        "Unable to connect to server";
+
+                            }
+
+
+                            showError(
+                                    "Network error: "
+                                            + errorMessage
+                            );
+
+                        }
+
+                ) {
+
+                    @Override
+                    protected Map<String, String>
+                    getParams() {
+
+                        Map<String, String> params =
+                                new HashMap<>();
+
+
+                        params.put(
+                                "id",
+                                editingStudentId
+                        );
+
+
+                        params.put(
+                                "name",
+                                name
+                        );
+
+
+                        params.put(
+                                "roll_number",
+                                roll
+                        );
+
+
+                        params.put(
+                                "class_name",
+                                className
+                        );
+
+
+                        params.put(
+                                "section",
+                                section
+                        );
+
+
+                        params.put(
+                                "email",
+                                email
+                        );
+
+
+                        params.put(
+                                "phone",
+                                phone
+                        );
+
+
+                        return params;
+
+                    }
+
+                };
+
+
+        RequestQueue queue =
+                Volley.newRequestQueue(
+                        StudentActivity.this
+                );
+
+
+        queue.add(request);
+
+    }
+
+
+    // =========================================================
+    // SELECT PHOTO
+    // =========================================================
+
+    private void selectPhoto() {
 
         Intent intent =
                 new Intent(
@@ -532,633 +1059,68 @@ public class StudentActivity extends AppCompatActivity {
 
         startActivityForResult(
                 intent,
-                PICK_IMAGE_REQUEST
+                1001
         );
+
     }
 
 
-    // =====================================================
-    // ADD STUDENT
-    // =====================================================
+    // =========================================================
+    // PHOTO RESULT
+    // =========================================================
 
-    private void addStudent() {
+    @Override
+    protected void onActivityResult(
+            int requestCode,
+            int resultCode,
+            @Nullable Intent data
+    ) {
 
-        String name =
-                etStudentName
-                        .getText()
-                        .toString()
-                        .trim();
-
-
-        String rollNumber =
-                etRollNumber
-                        .getText()
-                        .toString()
-                        .trim();
+        super.onActivityResult(
+                requestCode,
+                resultCode,
+                data
+        );
 
 
-        String email =
-                etStudentEmail
-                        .getText()
-                        .toString()
-                        .trim();
+        if (requestCode == 1001 &&
+                resultCode == Activity.RESULT_OK &&
+                data != null &&
+                data.getData() != null) {
 
 
-        String phone =
-                etStudentPhone
-                        .getText()
-                        .toString()
-                        .trim();
+            selectedImageUri =
+                    data.getData();
 
 
-        String className =
-                spinnerStudentClass
-                        .getSelectedItem()
-                        .toString()
-                        .trim();
+            // -------------------------------------------------
+            // Show Selected Image
+            // -------------------------------------------------
 
-
-        String section =
-                spinnerStudentSection
-                        .getSelectedItem()
-                        .toString()
-                        .trim();
-
-
-        // =================================================
-        // VALIDATION
-        // =================================================
-
-        if (name.isEmpty()) {
-
-            etStudentName.setError(
-                    "Enter student name"
+            ivStudentPhoto.setImageURI(
+                    selectedImageUri
             );
 
-            etStudentName.requestFocus();
-
-            return;
-        }
-
-
-        if (rollNumber.isEmpty()) {
-
-            etRollNumber.setError(
-                    "Enter roll number"
-            );
-
-            etRollNumber.requestFocus();
-
-            return;
-        }
-
-
-        if (
-                className.equals(
-                        "Select Class"
-                )
-        ) {
 
             Toast.makeText(
-                    this,
-                    "Please select class",
+                    StudentActivity.this,
+                    "Photo selected successfully",
                     Toast.LENGTH_SHORT
             ).show();
 
-            return;
         }
 
-
-        if (
-                section.equals(
-                        "Select Section"
-                )
-        ) {
-
-            Toast.makeText(
-                    this,
-                    "Please select section",
-                    Toast.LENGTH_SHORT
-            ).show();
-
-            return;
-        }
-
-
-        setLoading(true);
-
-
-        new Thread(() -> {
-
-            HttpURLConnection connection =
-                    null;
-
-
-            try {
-
-                URL url =
-                        new URL(
-                                ADD_STUDENT_URL
-                        );
-
-
-                connection =
-                        (HttpURLConnection)
-                                url.openConnection();
-
-
-                connection.setRequestMethod(
-                        "POST"
-                );
-
-
-                connection.setDoOutput(
-                        true
-                );
-
-
-                connection.setRequestProperty(
-                        "Content-Type",
-                        "application/x-www-form-urlencoded"
-                );
-
-
-                String postData =
-
-                        "name=" +
-                                URLEncoder.encode(
-                                        name,
-                                        "UTF-8"
-                                )
-
-                                + "&roll_number=" +
-                                URLEncoder.encode(
-                                        rollNumber,
-                                        "UTF-8"
-                                )
-
-                                + "&class_name=" +
-                                URLEncoder.encode(
-                                        className,
-                                        "UTF-8"
-                                )
-
-                                + "&section=" +
-                                URLEncoder.encode(
-                                        section,
-                                        "UTF-8"
-                                )
-
-                                + "&email=" +
-                                URLEncoder.encode(
-                                        email,
-                                        "UTF-8"
-                                )
-
-                                + "&phone=" +
-                                URLEncoder.encode(
-                                        phone,
-                                        "UTF-8"
-                                );
-
-
-                OutputStream outputStream =
-                        connection.getOutputStream();
-
-
-                outputStream.write(
-                        postData.getBytes(
-                                StandardCharsets.UTF_8
-                        )
-                );
-
-
-                outputStream.flush();
-
-                outputStream.close();
-
-
-                String response =
-                        readResponse(
-                                connection
-                        );
-
-
-                JSONObject json =
-                        new JSONObject(
-                                response
-                        );
-
-
-                boolean success =
-                        json.optBoolean(
-                                "success",
-                                false
-                        );
-
-
-                String message =
-                        json.optString(
-                                "message",
-                                "Unknown server response"
-                        );
-
-
-                if (success) {
-
-                    String studentId =
-                            json.optString(
-                                    "student_id",
-                                    ""
-                            );
-
-
-                    if (
-                            selectedImageUri != null &&
-                                    !studentId.isEmpty()
-                    ) {
-
-                        uploadStudentPhoto(
-                                studentId,
-                                selectedImageUri
-                        );
-
-                    } else {
-
-                        runOnUiThread(() -> {
-
-                            setLoading(
-                                    false
-                            );
-
-
-                            Toast.makeText(
-                                    StudentActivity.this,
-                                    "Student added successfully",
-                                    Toast.LENGTH_SHORT
-                            ).show();
-
-
-                            clearForm();
-
-                        });
-                    }
-
-                } else {
-
-                    runOnUiThread(() -> {
-
-                        setLoading(
-                                false
-                        );
-
-
-                        showError(
-                                message
-                        );
-                    });
-                }
-
-
-            } catch (Exception e) {
-
-                runOnUiThread(() -> {
-
-                    setLoading(
-                            false
-                    );
-
-
-                    showError(
-                            "Add student error: "
-                                    + e.getMessage()
-                    );
-                });
-
-
-            } finally {
-
-                if (connection != null) {
-
-                    connection.disconnect();
-                }
-            }
-
-        }).start();
     }
 
 
-    // =====================================================
-    // UPDATE STUDENT
-    // =====================================================
-
-    private void updateStudent() {
-
-        String name =
-                etStudentName
-                        .getText()
-                        .toString()
-                        .trim();
-
-
-        String rollNumber =
-                etRollNumber
-                        .getText()
-                        .toString()
-                        .trim();
-
-
-        String email =
-                etStudentEmail
-                        .getText()
-                        .toString()
-                        .trim();
-
-
-        String phone =
-                etStudentPhone
-                        .getText()
-                        .toString()
-                        .trim();
-
-
-        String className =
-                spinnerStudentClass
-                        .getSelectedItem()
-                        .toString()
-                        .trim();
-
-
-        String section =
-                spinnerStudentSection
-                        .getSelectedItem()
-                        .toString()
-                        .trim();
-
-
-        // =================================================
-        // VALIDATION
-        // =================================================
-
-        if (name.isEmpty()) {
-
-            etStudentName.setError(
-                    "Enter student name"
-            );
-
-            etStudentName.requestFocus();
-
-            return;
-        }
-
-
-        if (rollNumber.isEmpty()) {
-
-            etRollNumber.setError(
-                    "Enter roll number"
-            );
-
-            etRollNumber.requestFocus();
-
-            return;
-        }
-
-
-        if (
-                className.equals(
-                        "Select Class"
-                )
-        ) {
-
-            Toast.makeText(
-                    this,
-                    "Please select class",
-                    Toast.LENGTH_SHORT
-            ).show();
-
-            return;
-        }
-
-
-        if (
-                section.equals(
-                        "Select Section"
-                )
-        ) {
-
-            Toast.makeText(
-                    this,
-                    "Please select section",
-                    Toast.LENGTH_SHORT
-            ).show();
-
-            return;
-        }
-
-
-        if (
-                editingStudentId == null ||
-                        editingStudentId.isEmpty()
-        ) {
-
-            Toast.makeText(
-                    this,
-                    "Student ID not found",
-                    Toast.LENGTH_SHORT
-            ).show();
-
-            return;
-        }
-
-
-        setLoading(true);
-
-
-        new Thread(() -> {
-
-            HttpURLConnection connection =
-                    null;
-
-
-            try {
-
-                URL url =
-                        new URL(
-                                UPDATE_STUDENT_URL
-                        );
-
-
-                connection =
-                        (HttpURLConnection)
-                                url.openConnection();
-
-
-                connection.setRequestMethod(
-                        "POST"
-                );
-
-
-                connection.setDoOutput(
-                        true
-                );
-
-
-                connection.setRequestProperty(
-                        "Content-Type",
-                        "application/x-www-form-urlencoded"
-                );
-
-
-                String postData =
-
-                        "id=" +
-                                URLEncoder.encode(
-                                        editingStudentId,
-                                        "UTF-8"
-                                )
-
-                                + "&name=" +
-                                URLEncoder.encode(
-                                        name,
-                                        "UTF-8"
-                                )
-
-                                + "&roll_number=" +
-                                URLEncoder.encode(
-                                        rollNumber,
-                                        "UTF-8"
-                                )
-
-                                + "&class_name=" +
-                                URLEncoder.encode(
-                                        className,
-                                        "UTF-8"
-                                )
-
-                                + "&section=" +
-                                URLEncoder.encode(
-                                        section,
-                                        "UTF-8"
-                                )
-
-                                + "&email=" +
-                                URLEncoder.encode(
-                                        email,
-                                        "UTF-8"
-                                )
-
-                                + "&phone=" +
-                                URLEncoder.encode(
-                                        phone,
-                                        "UTF-8"
-                                );
-
-
-                OutputStream outputStream =
-                        connection.getOutputStream();
-
-
-                outputStream.write(
-                        postData.getBytes(
-                                StandardCharsets.UTF_8
-                        )
-                );
-
-
-                outputStream.flush();
-
-                outputStream.close();
-
-
-                String response =
-                        readResponse(
-                                connection
-                        );
-
-
-                JSONObject json =
-                        new JSONObject(
-                                response
-                        );
-
-
-                boolean success =
-                        json.optBoolean(
-                                "success",
-                                false
-                        );
-
-
-                String message =
-                        json.optString(
-                                "message",
-                                "Unknown server response"
-                        );
-
-
-                runOnUiThread(() -> {
-
-                    setLoading(
-                            false
-                    );
-
-
-                    if (success) {
-
-                        Toast.makeText(
-                                StudentActivity.this,
-                                "Student updated successfully",
-                                Toast.LENGTH_SHORT
-                        ).show();
-
-
-                        exitEditMode();
-
-                    } else {
-
-                        showError(
-                                message
-                        );
-                    }
-
-                });
-
-
-            } catch (Exception e) {
-
-                runOnUiThread(() -> {
-
-                    setLoading(
-                            false
-                    );
-
-
-                    showError(
-                            "Update error: "
-                                    + e.getMessage()
-                    );
-                });
-
-
-            } finally {
-
-                if (connection != null) {
-
-                    connection.disconnect();
-                }
-            }
-
-        }).start();
-    }
-
-
-    // =====================================================
+    // =========================================================
     // UPLOAD STUDENT PHOTO
-    // =====================================================
+    // =========================================================
 
     private void uploadStudentPhoto(
             String studentId,
-            Uri imageUri
+            Uri imageUri,
+            boolean editMode
     ) {
 
         new Thread(() -> {
@@ -1174,6 +1136,10 @@ public class StudentActivity extends AppCompatActivity {
 
             try {
 
+                // -------------------------------------------------
+                // URL
+                // -------------------------------------------------
+
                 URL url =
                         new URL(
                                 UPLOAD_PHOTO_URL
@@ -1185,12 +1151,21 @@ public class StudentActivity extends AppCompatActivity {
                                 url.openConnection();
 
 
+                // -------------------------------------------------
+                // Connection Settings
+                // -------------------------------------------------
+
                 connection.setRequestMethod(
                         "POST"
                 );
 
 
                 connection.setDoOutput(
+                        true
+                );
+
+
+                connection.setDoInput(
                         true
                 );
 
@@ -1207,11 +1182,17 @@ public class StudentActivity extends AppCompatActivity {
                 );
 
 
-                DataOutputStream outputStream =
-                        new DataOutputStream(
-                                connection.getOutputStream()
-                        );
+                // -------------------------------------------------
+                // Output Stream
+                // -------------------------------------------------
 
+                OutputStream outputStream =
+                        connection.getOutputStream();
+
+
+                // -------------------------------------------------
+                // Student ID
+                // -------------------------------------------------
 
                 writeFormField(
                         outputStream,
@@ -1221,6 +1202,10 @@ public class StudentActivity extends AppCompatActivity {
                 );
 
 
+                // -------------------------------------------------
+                // Photo
+                // -------------------------------------------------
+
                 writeFileField(
                         outputStream,
                         boundary,
@@ -1229,10 +1214,16 @@ public class StudentActivity extends AppCompatActivity {
                 );
 
 
-                outputStream.writeBytes(
-                        "--"
-                                + boundary
-                                + "--\r\n"
+                // -------------------------------------------------
+                // End Multipart Request
+                // -------------------------------------------------
+
+                outputStream.write(
+                        (
+                                "--"
+                                        + boundary
+                                        + "--\r\n"
+                        ).getBytes()
                 );
 
 
@@ -1241,56 +1232,111 @@ public class StudentActivity extends AppCompatActivity {
                 outputStream.close();
 
 
+                // -------------------------------------------------
+                // Server Response
+                // -------------------------------------------------
+
+                int responseCode =
+                        connection.getResponseCode();
+
+
+                InputStream inputStream;
+
+
+                if (responseCode >= 200 &&
+                        responseCode < 400) {
+
+                    inputStream =
+                            connection.getInputStream();
+
+                } else {
+
+                    inputStream =
+                            connection.getErrorStream();
+
+                }
+
+
+                if (inputStream == null) {
+
+                    throw new IOException(
+                            "Empty server response"
+                    );
+
+                }
+
+
                 String response =
-                        readResponse(
-                                connection
+                        readStream(
+                                inputStream
                         );
 
 
-                JSONObject json =
-                        new JSONObject(
-                                response
-                        );
-
-
-                boolean success =
-                        json.optBoolean(
-                                "success",
-                                false
-                        );
-
-
-                String message =
-                        json.optString(
-                                "message",
-                                "Photo upload failed"
-                        );
-
+                // -------------------------------------------------
+                // UI Thread
+                // -------------------------------------------------
 
                 runOnUiThread(() -> {
 
-                    setLoading(
-                            false
-                    );
+                    try {
+
+                        JSONObject json =
+                                new JSONObject(
+                                        response
+                                );
 
 
-                    if (success) {
-
-                        Toast.makeText(
-                                StudentActivity.this,
-                                "Student added successfully",
-                                Toast.LENGTH_SHORT
-                        ).show();
+                        boolean success =
+                                json.getBoolean(
+                                        "success"
+                                );
 
 
-                        clearForm();
+                        String message =
+                                json.getString(
+                                        "message"
+                                );
 
-                    } else {
+
+                        if (success) {
+
+                            if (editMode) {
+
+                                Toast.makeText(
+                                        StudentActivity.this,
+                                        "Student and photo updated successfully",
+                                        Toast.LENGTH_LONG
+                                ).show();
+
+                            } else {
+
+                                Toast.makeText(
+                                        StudentActivity.this,
+                                        "Student and photo added successfully",
+                                        Toast.LENGTH_LONG
+                                ).show();
+
+                            }
+
+
+                            finish();
+
+                        } else {
+
+                            showError(
+                                    message
+                            );
+
+                        }
+
+                    } catch (JSONException e) {
 
                         showError(
-                                message
+                                "Invalid photo upload response"
                         );
+
                     }
+
                 });
 
 
@@ -1298,95 +1344,88 @@ public class StudentActivity extends AppCompatActivity {
 
                 runOnUiThread(() -> {
 
-                    setLoading(
-                            false
-                    );
-
-
                     showError(
-                            "Photo upload error: "
+                            "Photo upload failed: "
                                     + e.getMessage()
                     );
-                });
 
+                });
 
             } finally {
 
                 if (connection != null) {
 
                     connection.disconnect();
+
                 }
+
             }
 
         }).start();
+
     }
 
 
-    // =====================================================
-    // WRITE MULTIPART FORM FIELD
-    // =====================================================
+    // =========================================================
+    // WRITE FORM FIELD
+    // =========================================================
 
     private void writeFormField(
-            DataOutputStream outputStream,
+            OutputStream outputStream,
             String boundary,
             String fieldName,
             String value
-    ) throws Exception {
+    ) throws IOException {
 
-        outputStream.writeBytes(
+        String data =
                 "--"
                         + boundary
                         + "\r\n"
-        );
-
-
-        outputStream.writeBytes(
-                "Content-Disposition: form-data; name=\""
+                        + "Content-Disposition: form-data; name=\""
                         + fieldName
-                        + "\"\r\n\r\n"
-        );
-
-
-        outputStream.writeBytes(
-                value
+                        + "\"\r\n"
                         + "\r\n"
+                        + value
+                        + "\r\n";
+
+
+        outputStream.write(
+                data.getBytes()
         );
+
     }
 
 
-    // =====================================================
-    // WRITE MULTIPART FILE FIELD
-    // =====================================================
+    // =========================================================
+    // WRITE FILE FIELD
+    // =========================================================
 
     private void writeFileField(
-            DataOutputStream outputStream,
+            OutputStream outputStream,
             String boundary,
             String fieldName,
             Uri imageUri
-    ) throws Exception {
+    ) throws IOException {
 
         String fileName =
                 "student_photo.jpg";
 
 
-        outputStream.writeBytes(
+        String header =
                 "--"
                         + boundary
                         + "\r\n"
-        );
-
-
-        outputStream.writeBytes(
-                "Content-Disposition: form-data; name=\""
+                        + "Content-Disposition: form-data; name=\""
                         + fieldName
                         + "\"; filename=\""
                         + fileName
                         + "\"\r\n"
-        );
+                        + "Content-Type: image/jpeg\r\n"
+                        + "\r\n";
 
 
-        outputStream.writeBytes(
-                "Content-Type: image/jpeg\r\n\r\n"
+        outputStream.write(
+                header.getBytes()
         );
 
 
@@ -1399,9 +1438,10 @@ public class StudentActivity extends AppCompatActivity {
 
         if (inputStream == null) {
 
-            throw new Exception(
-                    "Unable to open selected image"
+            throw new IOException(
+                    "Unable to read selected image"
             );
+
         }
 
 
@@ -1423,144 +1463,122 @@ public class StudentActivity extends AppCompatActivity {
                     0,
                     bytesRead
             );
+
         }
 
 
         inputStream.close();
 
 
-        outputStream.writeBytes(
-                "\r\n"
+        outputStream.write(
+                "\r\n".getBytes()
         );
+
     }
 
 
-    // =====================================================
-    // EXIT EDIT MODE
-    // =====================================================
+    // =========================================================
+    // READ STREAM
+    // =========================================================
 
-    private void exitEditMode() {
+    private String readStream(
+            InputStream inputStream
+    ) throws IOException {
 
-        isEditMode = false;
+        ByteArrayOutputStream outputStream =
+                new ByteArrayOutputStream();
 
-        editingStudentId = "";
+
+        byte[] buffer =
+                new byte[4096];
 
 
-        btnAddStudent.setText(
-                "ADD STUDENT"
+        int bytesRead;
+
+
+        while (
+                (bytesRead =
+                        inputStream.read(buffer))
+                        != -1
+        ) {
+
+            outputStream.write(
+                    buffer,
+                    0,
+                    bytesRead
+            );
+
+        }
+
+
+        inputStream.close();
+
+
+        return outputStream.toString(
+                "UTF-8"
         );
 
-
-        btnCancelEdit.setVisibility(
-                View.GONE
-        );
-
-
-        clearForm();
-
-
-        tvMessage.setText("");
     }
 
 
-    // =====================================================
-    // CLEAR FORM
-    // =====================================================
-
-    private void clearForm() {
-
-        etStudentName.setText("");
-
-        etRollNumber.setText("");
-
-        etStudentEmail.setText("");
-
-        etStudentPhone.setText("");
-
-
-        spinnerStudentClass.setSelection(
-                0
-        );
-
-
-        spinnerStudentSection.setSelection(
-                0
-        );
-
-
-        selectedImageUri = null;
-
-
-        ivStudentPhoto.setImageDrawable(
-                null
-        );
-
-
-        ivStudentPhoto.setVisibility(
-                View.GONE
-        );
-    }
-
-
-    // =====================================================
+    // =========================================================
     // LOADING
-    // =====================================================
+    // =========================================================
 
     private void setLoading(
             boolean loading
     ) {
 
-        runOnUiThread(() -> {
+        if (loading) {
 
-            if (loading) {
-
-                progressBar.setVisibility(
-                        View.VISIBLE
-                );
+            progressBar.setVisibility(
+                    View.VISIBLE
+            );
 
 
-                btnAddStudent.setEnabled(
-                        false
-                );
+            btnAddStudent.setEnabled(
+                    false
+            );
 
 
-                btnSelectPhoto.setEnabled(
-                        false
-                );
+            btnSelectPhoto.setEnabled(
+                    false
+            );
 
 
-                btnCancelEdit.setEnabled(
-                        false
-                );
+            btnCancelEdit.setEnabled(
+                    false
+            );
 
-            } else {
+        } else {
 
-                progressBar.setVisibility(
-                        View.GONE
-                );
-
-
-                btnAddStudent.setEnabled(
-                        true
-                );
+            progressBar.setVisibility(
+                    View.GONE
+            );
 
 
-                btnSelectPhoto.setEnabled(
-                        true
-                );
+            btnAddStudent.setEnabled(
+                    true
+            );
 
 
-                btnCancelEdit.setEnabled(
-                        true
-                );
-            }
-        });
+            btnSelectPhoto.setEnabled(
+                    true
+            );
+
+
+            btnCancelEdit.setEnabled(
+                    true
+            );
+
+        }
+
     }
 
 
-    // =====================================================
+    // =========================================================
     // SHOW ERROR
-    // =====================================================
+    // =========================================================
 
     private void showError(
             String message
@@ -1578,133 +1596,45 @@ public class StudentActivity extends AppCompatActivity {
                         47
                 )
         );
+
+
+        Toast.makeText(
+                StudentActivity.this,
+                message,
+                Toast.LENGTH_LONG
+        ).show();
+
     }
 
 
-    // =====================================================
-    // READ HTTP RESPONSE
-    // =====================================================
+    // =========================================================
+    // SHOW SUCCESS
+    // =========================================================
 
-    private String readResponse(
-            HttpURLConnection connection
-    ) throws Exception {
-
-        InputStream inputStream;
-
-
-        int responseCode =
-                connection.getResponseCode();
-
-
-        if (
-                responseCode >= 200 &&
-                        responseCode < 300
-        ) {
-
-            inputStream =
-                    connection.getInputStream();
-
-        } else {
-
-            inputStream =
-                    connection.getErrorStream();
-
-
-            if (inputStream == null) {
-
-                throw new Exception(
-                        "HTTP Error: "
-                                + responseCode
-                );
-            }
-        }
-
-
-        BufferedReader reader =
-                new BufferedReader(
-                        new InputStreamReader(
-                                inputStream,
-                                StandardCharsets.UTF_8
-                        )
-                );
-
-
-        StringBuilder response =
-                new StringBuilder();
-
-
-        String line;
-
-
-        while (
-                (line = reader.readLine())
-                        != null
-        ) {
-
-            response.append(line);
-        }
-
-
-        reader.close();
-
-
-        return response.toString();
-    }
-
-
-    // =====================================================
-    // IMAGE PICKER RESULT
-    // =====================================================
-
-    @Override
-    protected void onActivityResult(
-            int requestCode,
-            int resultCode,
-            Intent data
+    private void showSuccess(
+            String message
     ) {
 
-        super.onActivityResult(
-                requestCode,
-                resultCode,
-                data
+        tvMessage.setText(
+                message
         );
 
 
-        if (
-                requestCode == PICK_IMAGE_REQUEST &&
-                        resultCode == RESULT_OK &&
-                        data != null
-        ) {
-
-            selectedImageUri =
-                    data.getData();
-
-
-            if (selectedImageUri != null) {
-
-                ivStudentPhoto.setImageURI(
-                        selectedImageUri
-                );
+        tvMessage.setTextColor(
+                Color.rgb(
+                        46,
+                        125,
+                        50
+                )
+        );
 
 
-                ivStudentPhoto.setVisibility(
-                        View.VISIBLE
-                );
+        Toast.makeText(
+                StudentActivity.this,
+                message,
+                Toast.LENGTH_LONG
+        ).show();
 
-
-                tvMessage.setText(
-                        "Photo selected successfully"
-                );
-
-
-                tvMessage.setTextColor(
-                        Color.rgb(
-                                46,
-                                125,
-                                50
-                        )
-                );
-            }
-        }
     }
+
 }

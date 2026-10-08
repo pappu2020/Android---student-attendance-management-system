@@ -1,6 +1,5 @@
 package com.example.studentattendance;
 
-import android.app.AlertDialog;
 import android.content.Intent;
 import android.graphics.Color;
 import android.graphics.Typeface;
@@ -16,6 +15,7 @@ import android.widget.Spinner;
 import android.widget.TextView;
 import android.widget.Toast;
 
+import androidx.appcompat.app.AlertDialog;
 import androidx.appcompat.app.AppCompatActivity;
 
 import com.android.volley.Request;
@@ -24,12 +24,9 @@ import com.android.volley.toolbox.StringRequest;
 import com.android.volley.toolbox.Volley;
 
 import org.json.JSONArray;
-import org.json.JSONException;
 import org.json.JSONObject;
 
-import java.util.ArrayList;
 import java.util.HashMap;
-import java.util.Locale;
 import java.util.Map;
 
 public class StudentListActivity extends AppCompatActivity {
@@ -46,7 +43,7 @@ public class StudentListActivity extends AppCompatActivity {
 
 
     // =========================================================
-    // UI
+    // UI COMPONENTS
     // =========================================================
 
     private Spinner spinnerStudentClass;
@@ -54,27 +51,13 @@ public class StudentListActivity extends AppCompatActivity {
 
     private TextView tvStudentListTitle;
     private TextView tvStudentListCount;
+    private TextView tvMessage;
 
     private LinearLayout llStudentList;
 
 
     // =========================================================
-    // Volley
-    // =========================================================
-
-    private RequestQueue requestQueue;
-
-
-    // =========================================================
-    // Student Data
-    // =========================================================
-
-    private final ArrayList<HashMap<String, String>> studentList =
-            new ArrayList<>();
-
-
-    // =========================================================
-    // Selected Filter
+    // VARIABLES
     // =========================================================
 
     private String selectedClass = "";
@@ -82,69 +65,116 @@ public class StudentListActivity extends AppCompatActivity {
 
 
     // =========================================================
-    // onCreate
+    // ON CREATE
     // =========================================================
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
+
         super.onCreate(savedInstanceState);
 
-        setContentView(R.layout.activity_student_list);
+        setContentView(
+                R.layout.activity_student_list
+        );
 
 
-        // =====================================================
+        // -----------------------------------------------------
         // Initialize Views
-        // =====================================================
+        // -----------------------------------------------------
 
-        spinnerStudentClass =
-                findViewById(R.id.spinnerStudentClass);
-
-        spinnerStudentSection =
-                findViewById(R.id.spinnerStudentSection);
-
-        tvStudentListTitle =
-                findViewById(R.id.tvStudentListTitle);
-
-        tvStudentListCount =
-                findViewById(R.id.tvStudentListCount);
-
-        llStudentList =
-                findViewById(R.id.llStudentList);
+        initializeViews();
 
 
-        // =====================================================
-        // Request Queue
-        // =====================================================
-
-        requestQueue =
-                Volley.newRequestQueue(this);
-
-
-        // =====================================================
-        // Setup UI
-        // =====================================================
+        // -----------------------------------------------------
+        // Setup Spinners
+        // -----------------------------------------------------
 
         setupClassSpinner();
 
         setupSectionSpinner();
 
 
-        // =====================================================
-        // Initial State
-        // =====================================================
+        // -----------------------------------------------------
+        // Spinner Listeners
+        // -----------------------------------------------------
 
-        tvStudentListTitle.setText(
-                "Students"
-        );
+        setupSpinnerListeners();
 
-        tvStudentListCount.setText(
-                "0 Students"
-        );
+    }
 
 
-        showEmptyMessage(
-                "Select class and section to view students"
-        );
+    // =========================================================
+    // INITIALIZE VIEWS
+    // =========================================================
+
+    private void initializeViews() {
+
+        spinnerStudentClass =
+                findViewById(
+                        R.id.spinnerStudentClass
+                );
+
+
+        spinnerStudentSection =
+                findViewById(
+                        R.id.spinnerStudentSection
+                );
+
+
+        tvStudentListTitle =
+                findViewById(
+                        R.id.tvStudentListTitle
+                );
+
+
+        tvStudentListCount =
+                findViewById(
+                        R.id.tvStudentListCount
+                );
+
+
+        tvMessage =
+                findViewById(
+                        R.id.tvMessage
+                );
+
+
+        llStudentList =
+                findViewById(
+                        R.id.llStudentList
+                );
+
+
+        // -----------------------------------------------------
+        // Initial Text
+        // -----------------------------------------------------
+
+        if (tvStudentListTitle != null) {
+
+            tvStudentListTitle.setText(
+                    "Student List"
+            );
+
+        }
+
+
+        if (tvStudentListCount != null) {
+
+            tvStudentListCount.setText(
+                    "Select class and section"
+            );
+
+        }
+
+
+        if (tvMessage != null) {
+
+            tvMessage.setText(
+                    ""
+            );
+
+        }
+
     }
 
 
@@ -154,48 +184,26 @@ public class StudentListActivity extends AppCompatActivity {
 
     private void setupClassSpinner() {
 
-        ArrayList<String> classList =
-                new ArrayList<>();
+        String[] classes = {
 
+                "Select Class",
 
-        classList.add(
-                "Select Class"
-        );
-
-        classList.add(
-                "Class 6"
-        );
-
-        classList.add(
-                "Class 7"
-        );
-
-        classList.add(
-                "Class 8"
-        );
-
-        classList.add(
-                "Class 9"
-        );
-
-        classList.add(
-                "Class 10"
-        );
-
-        classList.add(
-                "Class 11"
-        );
-
-        classList.add(
+                "Class 6",
+                "Class 7",
+                "Class 8",
+                "Class 9",
+                "Class 10",
+                "Class 11",
                 "Class 12"
-        );
+
+        };
 
 
         ArrayAdapter<String> adapter =
                 new ArrayAdapter<>(
                         this,
                         android.R.layout.simple_spinner_item,
-                        classList
+                        classes
                 );
 
 
@@ -208,6 +216,52 @@ public class StudentListActivity extends AppCompatActivity {
                 adapter
         );
 
+    }
+
+
+    // =========================================================
+    // SECTION SPINNER
+    // =========================================================
+
+    private void setupSectionSpinner() {
+
+        String[] sections = {
+
+                "Select Section",
+
+                "Section A",
+                "Section B",
+                "Section C",
+                "Section D"
+
+        };
+
+
+        ArrayAdapter<String> adapter =
+                new ArrayAdapter<>(
+                        this,
+                        android.R.layout.simple_spinner_item,
+                        sections
+                );
+
+
+        adapter.setDropDownViewResource(
+                android.R.layout.simple_spinner_dropdown_item
+        );
+
+
+        spinnerStudentSection.setAdapter(
+                adapter
+        );
+
+    }
+
+
+    // =========================================================
+    // SPINNER LISTENERS
+    // =========================================================
+
+    private void setupSpinnerListeners() {
 
         spinnerStudentClass.setOnItemSelectedListener(
                 new AdapterView.OnItemSelectedListener() {
@@ -220,49 +274,14 @@ public class StudentListActivity extends AppCompatActivity {
                             long id
                     ) {
 
-                        if (position == 0) {
-
-                            selectedClass = "";
-
-                            selectedSection = "";
-
-                            clearStudentList();
-
-                            spinnerStudentSection.setSelection(
-                                    0
-                            );
-
-                            showEmptyMessage(
-                                    "Select class and section to view students"
-                            );
-
-                            return;
-                        }
-
-
                         selectedClass =
                                 parent
-                                        .getItemAtPosition(
-                                                position
-                                        )
+                                        .getItemAtPosition(position)
                                         .toString();
 
 
-                        // Reset section
+                        tryLoadStudents();
 
-                        selectedSection = "";
-
-                        spinnerStudentSection.setSelection(
-                                0
-                        );
-
-
-                        clearStudentList();
-
-
-                        showEmptyMessage(
-                                "Now select a section"
-                        );
                     }
 
 
@@ -272,57 +291,8 @@ public class StudentListActivity extends AppCompatActivity {
                     ) {
 
                     }
+
                 }
-        );
-    }
-
-
-    // =========================================================
-    // SECTION SPINNER
-    // =========================================================
-
-    private void setupSectionSpinner() {
-
-        ArrayList<String> sectionList =
-                new ArrayList<>();
-
-
-        sectionList.add(
-                "Select Section"
-        );
-
-        sectionList.add(
-                "Section A"
-        );
-
-        sectionList.add(
-                "Section B"
-        );
-
-        sectionList.add(
-                "Section C"
-        );
-
-        sectionList.add(
-                "Section D"
-        );
-
-
-        ArrayAdapter<String> adapter =
-                new ArrayAdapter<>(
-                        this,
-                        android.R.layout.simple_spinner_item,
-                        sectionList
-                );
-
-
-        adapter.setDropDownViewResource(
-                android.R.layout.simple_spinner_dropdown_item
-        );
-
-
-        spinnerStudentSection.setAdapter(
-                adapter
         );
 
 
@@ -337,51 +307,14 @@ public class StudentListActivity extends AppCompatActivity {
                             long id
                     ) {
 
-                        if (position == 0) {
-
-                            selectedSection = "";
-
-                            clearStudentList();
-
-                            showEmptyMessage(
-                                    "Select section to view students"
-                            );
-
-                            return;
-                        }
-
-
-                        // Check class
-
-                        if (selectedClass.isEmpty()) {
-
-                            Toast.makeText(
-                                    StudentListActivity.this,
-                                    "Please select class first",
-                                    Toast.LENGTH_SHORT
-                            ).show();
-
-
-                            spinnerStudentSection.setSelection(
-                                    0
-                            );
-
-                            return;
-                        }
-
-
                         selectedSection =
                                 parent
-                                        .getItemAtPosition(
-                                                position
-                                        )
+                                        .getItemAtPosition(position)
                                         .toString();
 
 
-                        loadStudents(
-                                selectedClass,
-                                selectedSection
-                        );
+                        tryLoadStudents();
+
                     }
 
 
@@ -391,8 +324,37 @@ public class StudentListActivity extends AppCompatActivity {
                     ) {
 
                     }
+
                 }
         );
+
+    }
+
+
+    // =========================================================
+    // TRY LOAD STUDENTS
+    // =========================================================
+
+    private void tryLoadStudents() {
+
+        if (selectedClass == null ||
+                selectedClass.equals("Select Class")) {
+
+            return;
+
+        }
+
+
+        if (selectedSection == null ||
+                selectedSection.equals("Select Section")) {
+
+            return;
+
+        }
+
+
+        loadStudents();
+
     }
 
 
@@ -400,22 +362,16 @@ public class StudentListActivity extends AppCompatActivity {
     // LOAD STUDENTS
     // =========================================================
 
-    private void loadStudents(
-            String className,
-            String section
-    ) {
+    private void loadStudents() {
 
-        clearStudentList();
+        if (llStudentList == null) {
 
+            return;
 
-        tvStudentListCount.setText(
-                "Loading..."
-        );
+        }
 
 
-        showEmptyMessage(
-                "Loading students..."
-        );
+        showLoadingMessage();
 
 
         StringRequest request =
@@ -425,218 +381,101 @@ public class StudentListActivity extends AppCompatActivity {
 
                         response -> {
 
+                            hideLoadingMessage();
+
+
                             try {
 
-                                JSONObject jsonObject =
+                                JSONObject json =
                                         new JSONObject(
                                                 response
                                         );
 
 
                                 boolean success =
-                                        jsonObject.optBoolean(
-                                                "success",
-                                                false
+                                        json.getBoolean(
+                                                "success"
                                         );
 
 
                                 if (!success) {
 
-                                    tvStudentListCount.setText(
-                                            "0 Students"
-                                    );
-
-
-                                    showEmptyMessage(
-                                            jsonObject.optString(
+                                    String message =
+                                            json.optString(
                                                     "message",
-                                                    "No students found"
-                                            )
-                                    );
+                                                    "Unable to load students"
+                                            );
 
+
+                                    showError(
+                                            message
+                                    );
 
                                     return;
+
                                 }
 
 
-                                JSONArray studentsArray =
-                                        jsonObject.optJSONArray(
+                                JSONArray students =
+                                        json.optJSONArray(
                                                 "students"
                                         );
 
 
-                                if (studentsArray == null
-                                        || studentsArray.length() == 0) {
+                                if (students == null) {
 
-                                    tvStudentListCount.setText(
-                                            "0 Students"
-                                    );
-
-
-                                    showEmptyMessage(
-                                            "No students found in "
-                                                    + className
-                                                    + " - "
-                                                    + section
-                                    );
-
+                                    showEmptyMessage();
 
                                     return;
+
                                 }
 
 
-                                // Clear old data
-
-                                studentList.clear();
-
-
-                                // =========================================
-                                // Read Students
-                                // =========================================
-
-                                for (int i = 0;
-                                     i < studentsArray.length();
-                                     i++) {
-
-                                    JSONObject object =
-                                            studentsArray
-                                                    .getJSONObject(i);
-
-
-                                    HashMap<String, String> student =
-                                            new HashMap<>();
-
-
-                                    student.put(
-                                            "id",
-                                            object.optString(
-                                                    "id"
-                                            )
-                                    );
-
-
-                                    student.put(
-                                            "name",
-                                            object.optString(
-                                                    "name"
-                                            )
-                                    );
-
-
-                                    student.put(
-                                            "roll_number",
-                                            object.optString(
-                                                    "roll_number"
-                                            )
-                                    );
-
-
-                                    student.put(
-                                            "class_name",
-                                            object.optString(
-                                                    "class_name"
-                                            )
-                                    );
-
-
-                                    student.put(
-                                            "section",
-                                            object.optString(
-                                                    "section"
-                                            )
-                                    );
-
-
-                                    student.put(
-                                            "email",
-                                            object.optString(
-                                                    "email"
-                                            )
-                                    );
-
-
-                                    student.put(
-                                            "phone",
-                                            object.optString(
-                                                    "phone"
-                                            )
-                                    );
-
-
-                                    student.put(
-                                            "photo",
-                                            object.optString(
-                                                    "photo"
-                                            )
-                                    );
-
-
-                                    studentList.add(
-                                            student
-                                    );
-                                }
-
-
-                                // =========================================
-                                // Update Count
-                                // =========================================
-
-                                tvStudentListCount.setText(
-                                        studentList.size()
-                                                + " Students"
+                                displayStudents(
+                                        students
                                 );
 
 
-                                // =========================================
-                                // Display
-                                // =========================================
+                            } catch (Exception e) {
 
-                                displayStudents();
-
-
-                            } catch (JSONException e) {
-
-                                tvStudentListCount.setText(
-                                        "0 Students"
-                                );
-
-
-                                showEmptyMessage(
+                                showError(
                                         "Invalid server response"
                                 );
 
-
-                                Toast.makeText(
-                                        StudentListActivity.this,
-                                        "JSON error: "
-                                                + e.getMessage(),
-                                        Toast.LENGTH_SHORT
-                                ).show();
                             }
+
                         },
 
                         error -> {
 
-                            tvStudentListCount.setText(
-                                    "0 Students"
+                            hideLoadingMessage();
+
+
+                            String message =
+                                    error.getMessage();
+
+
+                            if (message == null ||
+                                    message.trim().isEmpty()) {
+
+                                message =
+                                        "Unable to connect to server";
+
+                            }
+
+
+                            showError(
+                                    "Network error: "
+                                            + message
                             );
 
-
-                            showEmptyMessage(
-                                    "Unable to connect to server"
-                            );
-
-
-                            Toast.makeText(
-                                    StudentListActivity.this,
-                                    "Failed to load students",
-                                    Toast.LENGTH_SHORT
-                            ).show();
                         }
+
                 ) {
 
                     @Override
-                    protected Map<String, String> getParams() {
+                    protected Map<String, String>
+                    getParams() {
 
                         Map<String, String> params =
                                 new HashMap<>();
@@ -644,24 +483,31 @@ public class StudentListActivity extends AppCompatActivity {
 
                         params.put(
                                 "class_name",
-                                className
+                                selectedClass
                         );
 
 
                         params.put(
                                 "section",
-                                section
+                                selectedSection
                         );
 
 
                         return params;
+
                     }
+
                 };
 
 
-        requestQueue.add(
-                request
-        );
+        RequestQueue queue =
+                Volley.newRequestQueue(
+                        StudentListActivity.this
+                );
+
+
+        queue.add(request);
+
     }
 
 
@@ -669,28 +515,133 @@ public class StudentListActivity extends AppCompatActivity {
     // DISPLAY STUDENTS
     // =========================================================
 
-    private void displayStudents() {
+    private void displayStudents(
+            JSONArray students
+    ) {
 
         llStudentList.removeAllViews();
 
 
-        if (studentList.isEmpty()) {
+        int totalStudents =
+                students.length();
 
-            showEmptyMessage(
-                    "No students found"
+
+        if (tvStudentListCount != null) {
+
+            tvStudentListCount.setText(
+                    "Total Students: "
+                            + totalStudents
             );
+
+        }
+
+
+        if (totalStudents == 0) {
+
+            showEmptyMessage();
 
             return;
+
         }
 
 
-        for (HashMap<String, String> student
-                : studentList) {
+        if (tvMessage != null) {
 
-            createStudentCard(
-                    student
+            tvMessage.setText(
+                    ""
             );
+
         }
+
+
+        for (
+                int i = 0;
+                i < students.length();
+                i++
+        ) {
+
+            try {
+
+                JSONObject student =
+                        students.getJSONObject(i);
+
+
+                String id =
+                        student.optString(
+                                "id",
+                                ""
+                        );
+
+
+                String name =
+                        student.optString(
+                                "name",
+                                "Unknown Student"
+                        );
+
+
+                String rollNumber =
+                        student.optString(
+                                "roll_number",
+                                ""
+                        );
+
+
+                String className =
+                        student.optString(
+                                "class_name",
+                                selectedClass
+                        );
+
+
+                String section =
+                        student.optString(
+                                "section",
+                                selectedSection
+                        );
+
+
+                String email =
+                        student.optString(
+                                "email",
+                                ""
+                        );
+
+
+                String phone =
+                        student.optString(
+                                "phone",
+                                ""
+                        );
+
+
+                String photo =
+                        student.optString(
+                                "photo",
+                                ""
+                        );
+
+
+                createStudentCard(
+                        id,
+                        name,
+                        rollNumber,
+                        className,
+                        section,
+                        email,
+                        phone,
+                        photo
+                );
+
+
+            } catch (Exception e) {
+
+                // Skip invalid student record
+
+            }
+
+        }
+
     }
 
 
@@ -699,31 +650,42 @@ public class StudentListActivity extends AppCompatActivity {
     // =========================================================
 
     private void createStudentCard(
-            HashMap<String, String> student
+            String id,
+            String name,
+            String rollNumber,
+            String className,
+            String section,
+            String email,
+            String phone,
+            String photo
     ) {
 
         // =====================================================
-        // Main Card
+        // MAIN CARD
         // =====================================================
 
-        LinearLayout card =
-                new LinearLayout(this);
+        LinearLayout cardLayout =
+                new LinearLayout(
+                        this
+                );
 
-        card.setOrientation(
+
+        cardLayout.setOrientation(
                 LinearLayout.VERTICAL
         );
 
 
-        card.setPadding(
-                20,
-                20,
-                20,
-                18
+        cardLayout.setPadding(
+                24,
+                24,
+                24,
+                24
         );
 
 
         GradientDrawable cardBackground =
                 new GradientDrawable();
+
 
         cardBackground.setColor(
                 Color.WHITE
@@ -738,20 +700,15 @@ public class StudentListActivity extends AppCompatActivity {
         cardBackground.setStroke(
                 1,
                 Color.rgb(
-                        230,
-                        233,
-                        238
+                        225,
+                        225,
+                        225
                 )
         );
 
 
-        card.setBackground(
+        cardLayout.setBackground(
                 cardBackground
-        );
-
-
-        card.setElevation(
-                3
         );
 
 
@@ -766,21 +723,24 @@ public class StudentListActivity extends AppCompatActivity {
                 0,
                 0,
                 0,
-                14
+                20
         );
 
 
-        card.setLayoutParams(
+        cardLayout.setLayoutParams(
                 cardParams
         );
 
 
         // =====================================================
-        // Top Row
+        // TOP ROW
         // =====================================================
 
         LinearLayout topRow =
-                new LinearLayout(this);
+                new LinearLayout(
+                        this
+                );
+
 
         topRow.setOrientation(
                 LinearLayout.HORIZONTAL
@@ -793,23 +753,21 @@ public class StudentListActivity extends AppCompatActivity {
 
 
         // =====================================================
-        // Avatar
+        // AVATAR
         // =====================================================
 
         TextView avatar =
-                new TextView(this);
-
-
-        String name =
-                student.get("name");
+                new TextView(
+                        this
+                );
 
 
         String firstLetter =
-                "?";
+                "S";
 
 
-        if (name != null
-                && !name.trim().isEmpty()) {
+        if (name != null &&
+                !name.trim().isEmpty()) {
 
             firstLetter =
                     name.trim()
@@ -817,9 +775,8 @@ public class StudentListActivity extends AppCompatActivity {
                                     0,
                                     1
                             )
-                            .toUpperCase(
-                                    Locale.getDefault()
-                            );
+                            .toUpperCase();
+
         }
 
 
@@ -839,7 +796,7 @@ public class StudentListActivity extends AppCompatActivity {
 
 
         avatar.setTypeface(
-                null,
+                Typeface.DEFAULT,
                 Typeface.BOLD
         );
 
@@ -855,9 +812,9 @@ public class StudentListActivity extends AppCompatActivity {
 
         avatarBackground.setColor(
                 Color.rgb(
-                        21,
-                        101,
-                        192
+                        33,
+                        150,
+                        243
                 )
         );
 
@@ -874,391 +831,223 @@ public class StudentListActivity extends AppCompatActivity {
 
         LinearLayout.LayoutParams avatarParams =
                 new LinearLayout.LayoutParams(
-                        58,
-                        58
+                        60,
+                        60
                 );
 
 
         avatarParams.setMargins(
                 0,
                 0,
-                15,
+                20,
                 0
         );
 
 
-        avatar.setLayoutParams(
+        topRow.addView(
+                avatar,
                 avatarParams
         );
 
 
-        topRow.addView(
-                avatar
-        );
-
-
         // =====================================================
-        // Name Container
+        // NAME + ROLL
         // =====================================================
 
-        LinearLayout nameContainer =
-                new LinearLayout(this);
+        LinearLayout nameLayout =
+                new LinearLayout(
+                        this
+                );
 
 
-        nameContainer.setOrientation(
+        nameLayout.setOrientation(
                 LinearLayout.VERTICAL
         );
 
 
-        TextView nameText =
-                new TextView(this);
+        TextView tvName =
+                new TextView(
+                        this
+                );
 
 
-        nameText.setText(
+        tvName.setText(
                 name
         );
 
 
-        nameText.setTextSize(
-                18
+        tvName.setTextSize(
+                19
         );
 
 
-        nameText.setTextColor(
+        tvName.setTextColor(
                 Color.rgb(
                         30,
-                        35,
-                        45
+                        30,
+                        30
                 )
         );
 
 
-        nameText.setTypeface(
-                null,
+        tvName.setTypeface(
+                Typeface.DEFAULT,
                 Typeface.BOLD
         );
 
 
-        nameContainer.addView(
-                nameText
+        TextView tvRoll =
+                new TextView(
+                        this
+                );
+
+
+        tvRoll.setText(
+                "Roll No: "
+                        + rollNumber
         );
 
 
-        TextView rollText =
-                new TextView(this);
-
-
-        rollText.setText(
-                "Roll Number: "
-                        + student.get(
-                        "roll_number"
-                )
+        tvRoll.setTextSize(
+                14
         );
 
 
-        rollText.setTextSize(
-                13
-        );
-
-
-        rollText.setTextColor(
+        tvRoll.setTextColor(
                 Color.rgb(
-                        110,
-                        115,
-                        125
+                        100,
+                        100,
+                        100
                 )
         );
 
 
-        LinearLayout.LayoutParams rollParams =
-                new LinearLayout.LayoutParams(
-                        LinearLayout.LayoutParams.WRAP_CONTENT,
-                        LinearLayout.LayoutParams.WRAP_CONTENT
-                );
-
-
-        rollParams.setMargins(
-                0,
-                5,
-                0,
-                0
+        nameLayout.addView(
+                tvName
         );
 
 
-        rollText.setLayoutParams(
-                rollParams
-        );
-
-
-        nameContainer.addView(
-                rollText
-        );
-
-
-        LinearLayout.LayoutParams nameParams =
-                new LinearLayout.LayoutParams(
-                        0,
-                        LinearLayout.LayoutParams.WRAP_CONTENT,
-                        1
-                );
-
-
-        nameContainer.setLayoutParams(
-                nameParams
+        nameLayout.addView(
+                tvRoll
         );
 
 
         topRow.addView(
-                nameContainer
+                nameLayout,
+                new LinearLayout.LayoutParams(
+                        0,
+                        LinearLayout.LayoutParams.WRAP_CONTENT,
+                        1
+                )
         );
 
 
-        card.addView(
+        cardLayout.addView(
                 topRow
         );
 
 
         // =====================================================
-        // Divider
+        // CLASS / SECTION
         // =====================================================
 
-        View divider =
-                new View(this);
-
-
-        divider.setBackgroundColor(
-                Color.rgb(
-                        235,
-                        237,
-                        240
-                )
-        );
-
-
-        LinearLayout.LayoutParams dividerParams =
-                new LinearLayout.LayoutParams(
-                        LinearLayout.LayoutParams.MATCH_PARENT,
-                        1
+        TextView tvClass =
+                createInfoText(
+                        "Class: "
+                                + className
+                                + "    |    Section: "
+                                + section
                 );
 
 
-        dividerParams.setMargins(
-                0,
-                15,
-                0,
-                13
-        );
-
-
-        divider.setLayoutParams(
-                dividerParams
-        );
-
-
-        card.addView(
-                divider
+        cardLayout.addView(
+                tvClass
         );
 
 
         // =====================================================
-        // Class + Section
+        // EMAIL
         // =====================================================
 
-        TextView classText =
-                new TextView(this);
+        if (email != null &&
+                !email.trim().isEmpty()) {
 
-
-        classText.setText(
-                student.get(
-                        "class_name"
-                )
-                        + "  •  "
-                        + student.get(
-                        "section"
-                )
-        );
-
-
-        classText.setTextSize(
-                14
-        );
-
-
-        classText.setTextColor(
-                Color.rgb(
-                        21,
-                        101,
-                        192
-                )
-        );
-
-
-        classText.setTypeface(
-                null,
-                Typeface.BOLD
-        );
-
-
-        card.addView(
-                classText
-        );
-
-
-        // =====================================================
-        // Email
-        // =====================================================
-
-        String email =
-                student.get("email");
-
-
-        if (email != null
-                && !email.trim().isEmpty()) {
-
-            TextView emailText =
-                    new TextView(this);
-
-
-            emailText.setText(
-                    "Email: " + email
-            );
-
-
-            emailText.setTextSize(
-                    13
-            );
-
-
-            emailText.setTextColor(
-                    Color.rgb(
-                            100,
-                            105,
-                            115
-                    )
-            );
-
-
-            LinearLayout.LayoutParams emailParams =
-                    new LinearLayout.LayoutParams(
-                            LinearLayout.LayoutParams.MATCH_PARENT,
-                            LinearLayout.LayoutParams.WRAP_CONTENT
+            TextView tvEmail =
+                    createInfoText(
+                            "Email: "
+                                    + email
                     );
 
 
-            emailParams.setMargins(
-                    0,
-                    7,
-                    0,
-                    0
+            cardLayout.addView(
+                    tvEmail
             );
 
-
-            emailText.setLayoutParams(
-                    emailParams
-            );
-
-
-            card.addView(
-                    emailText
-            );
         }
 
 
         // =====================================================
-        // Phone
+        // PHONE
         // =====================================================
 
-        String phone =
-                student.get("phone");
+        if (phone != null &&
+                !phone.trim().isEmpty()) {
 
-
-        if (phone != null
-                && !phone.trim().isEmpty()) {
-
-            TextView phoneText =
-                    new TextView(this);
-
-
-            phoneText.setText(
-                    "Phone: " + phone
-            );
-
-
-            phoneText.setTextSize(
-                    13
-            );
-
-
-            phoneText.setTextColor(
-                    Color.rgb(
-                            100,
-                            105,
-                            115
-                    )
-            );
-
-
-            LinearLayout.LayoutParams phoneParams =
-                    new LinearLayout.LayoutParams(
-                            LinearLayout.LayoutParams.MATCH_PARENT,
-                            LinearLayout.LayoutParams.WRAP_CONTENT
+            TextView tvPhone =
+                    createInfoText(
+                            "Phone: "
+                                    + phone
                     );
 
 
-            phoneParams.setMargins(
-                    0,
-                    5,
-                    0,
-                    0
+            cardLayout.addView(
+                    tvPhone
             );
 
-
-            phoneText.setLayoutParams(
-                    phoneParams
-            );
-
-
-            card.addView(
-                    phoneText
-            );
         }
 
 
         // =====================================================
-        // Button Row
+        // STUDENT ID
         // =====================================================
 
-        LinearLayout buttonRow =
-                new LinearLayout(this);
+        TextView tvId =
+                createInfoText(
+                        "Student ID: "
+                                + id
+                );
 
 
-        buttonRow.setOrientation(
+        cardLayout.addView(
+                tvId
+        );
+
+
+        // =====================================================
+        // BUTTON LAYOUT
+        // =====================================================
+
+        LinearLayout buttonLayout =
+                new LinearLayout(
+                        this
+                );
+
+
+        buttonLayout.setOrientation(
                 LinearLayout.HORIZONTAL
         );
 
 
-        buttonRow.setGravity(
-                Gravity.CENTER_VERTICAL
+        buttonLayout.setGravity(
+                Gravity.CENTER
         );
 
 
-        LinearLayout.LayoutParams buttonRowParams =
-                new LinearLayout.LayoutParams(
-                        LinearLayout.LayoutParams.MATCH_PARENT,
-                        LinearLayout.LayoutParams.WRAP_CONTENT
-                );
-
-
-        buttonRowParams.setMargins(
+        buttonLayout.setPadding(
                 0,
-                16,
+                20,
                 0,
                 0
-        );
-
-
-        buttonRow.setLayoutParams(
-                buttonRowParams
         );
 
 
@@ -1266,43 +1055,21 @@ public class StudentListActivity extends AppCompatActivity {
         // EDIT BUTTON
         // =====================================================
 
-        Button editButton =
-                new Button(this);
-
-
-        editButton.setText(
-                "Edit"
-        );
-
-
-        editButton.setTextSize(
-                13
-        );
-
-
-        editButton.setTextColor(
-                Color.rgb(
-                        21,
-                        101,
-                        192
-                )
-        );
-
-
-        editButton.setAllCaps(
-                false
-        );
-
-
-        editButton.setBackgroundResource(
-                R.drawable.bg_spinner
-        );
+        Button btnEdit =
+                createActionButton(
+                        "EDIT",
+                        Color.rgb(
+                                33,
+                                150,
+                                243
+                        )
+                );
 
 
         LinearLayout.LayoutParams editParams =
                 new LinearLayout.LayoutParams(
                         0,
-                        50,
+                        55,
                         1
                 );
 
@@ -1310,93 +1077,14 @@ public class StudentListActivity extends AppCompatActivity {
         editParams.setMargins(
                 0,
                 0,
-                6,
+                8,
                 0
         );
 
 
-        editButton.setLayoutParams(
+        buttonLayout.addView(
+                btnEdit,
                 editParams
-        );
-
-
-        // =====================================================
-        // Edit Action
-        // =====================================================
-
-        editButton.setOnClickListener(
-                v -> {
-
-                    Intent intent =
-                            new Intent(
-                                    StudentListActivity.this,
-                                    StudentActivity.class
-                            );
-
-
-                    intent.putExtra(
-                            "edit_mode",
-                            true
-                    );
-
-
-                    intent.putExtra(
-                            "student_id",
-                            student.get("id")
-                    );
-
-
-                    intent.putExtra(
-                            "student_name",
-                            student.get("name")
-                    );
-
-
-                    intent.putExtra(
-                            "student_roll",
-                            student.get("roll_number")
-                    );
-
-
-                    intent.putExtra(
-                            "student_email",
-                            student.get("email")
-                    );
-
-
-                    intent.putExtra(
-                            "student_phone",
-                            student.get("phone")
-                    );
-
-
-                    intent.putExtra(
-                            "student_class",
-                            student.get("class_name")
-                    );
-
-
-                    intent.putExtra(
-                            "student_section",
-                            student.get("section")
-                    );
-
-
-                    intent.putExtra(
-                            "student_photo",
-                            student.get("photo")
-                    );
-
-
-                    startActivity(
-                            intent
-                    );
-                }
-        );
-
-
-        buttonRow.addView(
-                editButton
         );
 
 
@@ -1404,107 +1092,317 @@ public class StudentListActivity extends AppCompatActivity {
         // DELETE BUTTON
         // =====================================================
 
-        Button deleteButton =
-                new Button(this);
-
-
-        deleteButton.setText(
-                "Delete"
-        );
-
-
-        deleteButton.setTextSize(
-                13
-        );
-
-
-        deleteButton.setTextColor(
-                Color.rgb(
-                        198,
-                        40,
-                        40
-                )
-        );
-
-
-        deleteButton.setAllCaps(
-                false
-        );
-
-
-        deleteButton.setBackgroundResource(
-                R.drawable.bg_absent
-        );
+        Button btnDelete =
+                createActionButton(
+                        "DELETE",
+                        Color.rgb(
+                                211,
+                                47,
+                                47
+                        )
+                );
 
 
         LinearLayout.LayoutParams deleteParams =
                 new LinearLayout.LayoutParams(
                         0,
-                        50,
+                        55,
                         1
                 );
 
 
         deleteParams.setMargins(
-                6,
+                8,
                 0,
                 0,
                 0
         );
 
 
-        deleteButton.setLayoutParams(
+        buttonLayout.addView(
+                btnDelete,
                 deleteParams
         );
 
 
-        // =====================================================
-        // Delete Action
-        // =====================================================
-
-        deleteButton.setOnClickListener(
-                v -> showDeleteConfirmation(
-                        student
-                )
-        );
-
-
-        buttonRow.addView(
-                deleteButton
-        );
-
-
-        card.addView(
-                buttonRow
+        cardLayout.addView(
+                buttonLayout
         );
 
 
         // =====================================================
-        // Add Card
+        // EDIT CLICK
+        // =====================================================
+
+        btnEdit.setOnClickListener(
+                v -> {
+
+                    openEditStudent(
+                            id,
+                            name,
+                            rollNumber,
+                            className,
+                            section,
+                            email,
+                            phone,
+                            photo
+                    );
+
+                }
+        );
+
+
+        // =====================================================
+        // DELETE CLICK
+        // =====================================================
+
+        btnDelete.setOnClickListener(
+                v -> {
+
+                    confirmDeleteStudent(
+                            id,
+                            name
+                    );
+
+                }
+        );
+
+
+        // =====================================================
+        // ADD CARD
         // =====================================================
 
         llStudentList.addView(
-                card
+                cardLayout
         );
+
     }
 
 
     // =========================================================
-    // DELETE CONFIRMATION
+    // CREATE INFO TEXT
     // =========================================================
 
-    private void showDeleteConfirmation(
-            HashMap<String, String> student
+    private TextView createInfoText(
+            String text
     ) {
 
-        String studentName =
-                student.get("name");
+        TextView textView =
+                new TextView(
+                        this
+                );
 
 
-        new AlertDialog.Builder(this)
+        textView.setText(
+                text
+        );
+
+
+        textView.setTextSize(
+                14
+        );
+
+
+        textView.setTextColor(
+                Color.rgb(
+                        80,
+                        80,
+                        80
+                )
+        );
+
+
+        textView.setPadding(
+                0,
+                12,
+                0,
+                0
+        );
+
+
+        return textView;
+
+    }
+
+
+    // =========================================================
+    // CREATE ACTION BUTTON
+    // =========================================================
+
+    private Button createActionButton(
+            String text,
+            int backgroundColor
+    ) {
+
+        Button button =
+                new Button(
+                        this
+                );
+
+
+        button.setText(
+                text
+        );
+
+
+        button.setTextSize(
+                14
+        );
+
+
+        button.setTextColor(
+                Color.WHITE
+        );
+
+
+        button.setTypeface(
+                Typeface.DEFAULT,
+                Typeface.BOLD
+        );
+
+
+        button.setGravity(
+                Gravity.CENTER
+        );
+
+
+        button.setAllCaps(
+                false
+        );
+
+
+        GradientDrawable background =
+                new GradientDrawable();
+
+
+        background.setColor(
+                backgroundColor
+        );
+
+
+        background.setCornerRadius(
+                16
+        );
+
+
+        button.setBackground(
+                background
+        );
+
+
+        button.setMinHeight(
+                55
+        );
+
+
+        button.setMinimumHeight(
+                55
+        );
+
+
+        return button;
+
+    }
+
+
+    // =========================================================
+    // OPEN EDIT STUDENT
+    // =========================================================
+
+    private void openEditStudent(
+            String id,
+            String name,
+            String rollNumber,
+            String className,
+            String section,
+            String email,
+            String phone,
+            String photo
+    ) {
+
+        Intent intent =
+                new Intent(
+                        StudentListActivity.this,
+                        StudentActivity.class
+                );
+
+
+        intent.putExtra(
+                "edit_mode",
+                true
+        );
+
+
+        intent.putExtra(
+                "student_id",
+                id
+        );
+
+
+        intent.putExtra(
+                "student_name",
+                name
+        );
+
+
+        intent.putExtra(
+                "student_roll",
+                rollNumber
+        );
+
+
+        intent.putExtra(
+                "student_class",
+                className
+        );
+
+
+        intent.putExtra(
+                "student_section",
+                section
+        );
+
+
+        intent.putExtra(
+                "student_email",
+                email
+        );
+
+
+        intent.putExtra(
+                "student_phone",
+                phone
+        );
+
+
+        intent.putExtra(
+                "student_photo",
+                photo
+        );
+
+
+        startActivity(
+                intent
+        );
+
+    }
+
+
+    // =========================================================
+    // CONFIRM DELETE
+    // =========================================================
+
+    private void confirmDeleteStudent(
+            String studentId,
+            String studentName
+    ) {
+
+        new AlertDialog.Builder(
+                StudentListActivity.this
+        )
 
                 .setTitle(
-                        "Delete Student?"
+                        "Delete Student"
                 )
 
                 .setMessage(
@@ -1513,22 +1411,24 @@ public class StudentListActivity extends AppCompatActivity {
                                 + "?"
                 )
 
-                .setNegativeButton(
-                        "Cancel",
-                        null
-                )
-
                 .setPositiveButton(
-                        "Delete",
+                        "DELETE",
                         (dialog, which) -> {
 
                             deleteStudent(
-                                    student.get("id")
+                                    studentId
                             );
+
                         }
                 )
 
+                .setNegativeButton(
+                        "CANCEL",
+                        null
+                )
+
                 .show();
+
     }
 
 
@@ -1549,78 +1449,81 @@ public class StudentListActivity extends AppCompatActivity {
 
                             try {
 
-                                JSONObject jsonObject =
+                                JSONObject json =
                                         new JSONObject(
                                                 response
                                         );
 
 
                                 boolean success =
-                                        jsonObject.optBoolean(
-                                                "success",
-                                                false
+                                        json.getBoolean(
+                                                "success"
                                         );
 
 
                                 String message =
-                                        jsonObject.optString(
+                                        json.optString(
                                                 "message",
-                                                "Operation completed"
+                                                ""
                                         );
-
-
-                                Toast.makeText(
-                                        StudentListActivity.this,
-                                        message,
-                                        Toast.LENGTH_SHORT
-                                ).show();
 
 
                                 if (success) {
 
-                                    // Reload current filter
+                                    Toast.makeText(
+                                            StudentListActivity.this,
+                                            "Student deleted successfully",
+                                            Toast.LENGTH_SHORT
+                                    ).show();
 
-                                    if (!selectedClass.isEmpty()
-                                            && !selectedSection.isEmpty()) {
 
-                                        loadStudents(
-                                                selectedClass,
-                                                selectedSection
-                                        );
+                                    loadStudents();
 
-                                    } else {
+                                } else {
 
-                                        clearStudentList();
+                                    showError(
+                                            message
+                                    );
 
-                                        showEmptyMessage(
-                                                "Select class and section to view students"
-                                        );
-                                    }
                                 }
 
+                            } catch (Exception e) {
 
-                            } catch (JSONException e) {
+                                showError(
+                                        "Invalid server response"
+                                );
 
-                                Toast.makeText(
-                                        StudentListActivity.this,
-                                        "Invalid server response",
-                                        Toast.LENGTH_SHORT
-                                ).show();
                             }
+
                         },
 
                         error -> {
 
-                            Toast.makeText(
-                                    StudentListActivity.this,
-                                    "Failed to delete student",
-                                    Toast.LENGTH_SHORT
-                            ).show();
+                            String message =
+                                    error.getMessage();
+
+
+                            if (message == null ||
+                                    message.trim().isEmpty()) {
+
+                                message =
+                                        "Unable to connect to server";
+
+                            }
+
+
+                            showError(
+                                    "Delete failed: "
+                                            + message
+                            );
+
                         }
+
                 ) {
 
                     @Override
-                    protected Map<String, String> getParams() {
+                    protected Map<String, String>
+                    getParams() {
 
                         Map<String, String> params =
                                 new HashMap<>();
@@ -1633,89 +1536,148 @@ public class StudentListActivity extends AppCompatActivity {
 
 
                         return params;
+
                     }
+
                 };
 
 
-        requestQueue.add(
-                request
-        );
+        RequestQueue queue =
+                Volley.newRequestQueue(
+                        StudentListActivity.this
+                );
+
+
+        queue.add(request);
+
     }
 
 
     // =========================================================
-    // EMPTY STATE
+    // LOADING MESSAGE
     // =========================================================
 
-    private void showEmptyMessage(
+    private void showLoadingMessage() {
+
+        if (tvMessage != null) {
+
+            tvMessage.setText(
+                    "Loading students..."
+            );
+
+
+            tvMessage.setTextColor(
+                    Color.rgb(
+                            33,
+                            150,
+                            243
+                    )
+            );
+
+        }
+
+    }
+
+
+    // =========================================================
+    // HIDE LOADING MESSAGE
+    // =========================================================
+
+    private void hideLoadingMessage() {
+
+        if (tvMessage != null) {
+
+            tvMessage.setText(
+                    ""
+            );
+
+        }
+
+    }
+
+
+    // =========================================================
+    // EMPTY MESSAGE
+    // =========================================================
+
+    private void showEmptyMessage() {
+
+        if (llStudentList != null) {
+
+            llStudentList.removeAllViews();
+
+        }
+
+
+        if (tvStudentListCount != null) {
+
+            tvStudentListCount.setText(
+                    "Total Students: 0"
+            );
+
+        }
+
+
+        if (tvMessage != null) {
+
+            tvMessage.setText(
+                    "No students found for "
+                            + selectedClass
+                            + " - "
+                            + selectedSection
+            );
+
+
+            tvMessage.setTextColor(
+                    Color.rgb(
+                            117,
+                            117,
+                            117
+                    )
+            );
+
+        }
+
+    }
+
+
+    // =========================================================
+    // ERROR MESSAGE
+    // =========================================================
+
+    private void showError(
             String message
     ) {
 
-        llStudentList.removeAllViews();
+        if (tvMessage != null) {
+
+            tvMessage.setText(
+                    message
+            );
 
 
-        TextView emptyText =
-                new TextView(this);
+            tvMessage.setTextColor(
+                    Color.rgb(
+                            211,
+                            47,
+                            47
+                    )
+            );
+
+        }
 
 
-        emptyText.setText(
-                message
-        );
+        Toast.makeText(
+                StudentListActivity.this,
+                message,
+                Toast.LENGTH_LONG
+        ).show();
 
-
-        emptyText.setTextSize(
-                15
-        );
-
-
-        emptyText.setTextColor(
-                Color.rgb(
-                        120,
-                        125,
-                        135
-                )
-        );
-
-
-        emptyText.setGravity(
-                Gravity.CENTER
-        );
-
-
-        emptyText.setPadding(
-                20,
-                60,
-                20,
-                60
-        );
-
-
-        llStudentList.addView(
-                emptyText
-        );
     }
 
 
     // =========================================================
-    // CLEAR STUDENT LIST
-    // =========================================================
-
-    private void clearStudentList() {
-
-        studentList.clear();
-
-
-        llStudentList.removeAllViews();
-
-
-        tvStudentListCount.setText(
-                "0 Students"
-        );
-    }
-
-
-    // =========================================================
-    // Refresh when returning from StudentActivity
+    // ON RESUME
     // =========================================================
 
     @Override
@@ -1724,16 +1686,19 @@ public class StudentListActivity extends AppCompatActivity {
         super.onResume();
 
 
-        // If a class and section are already selected,
-        // reload the list after Edit/Update.
+        if (selectedClass != null &&
+                !selectedClass.equals(
+                        "Select Class"
+                ) &&
+                selectedSection != null &&
+                !selectedSection.equals(
+                        "Select Section"
+                )) {
 
-        if (!selectedClass.isEmpty()
-                && !selectedSection.isEmpty()) {
+            loadStudents();
 
-            loadStudents(
-                    selectedClass,
-                    selectedSection
-            );
         }
+
     }
+
 }
