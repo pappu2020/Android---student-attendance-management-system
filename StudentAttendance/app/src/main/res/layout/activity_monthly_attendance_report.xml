@@ -1,0 +1,230 @@
+<ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="#F4F7FB"
+    android:fillViewport="true">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:padding="16dp">
+
+        <!-- Header -->
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="Monthly Attendance Report"
+            android:textColor="#172B4D"
+            android:textSize="24sp"
+            android:textStyle="bold"
+            android:paddingBottom="6dp" />
+
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="Filter attendance by month, class and section."
+            android:textColor="#64748B"
+            android:textSize="14sp"
+            android:paddingBottom="20dp" />
+
+        <!-- Filter Card -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:background="#FFFFFF"
+            android:padding="16dp"
+            android:elevation="3dp">
+
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="Select Month"
+                android:textColor="#334155"
+                android:textStyle="bold"
+                android:textSize="14sp" />
+
+            <Button
+                android:id="@+id/btnSelectMonth"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="6dp"
+                android:text="Select Month"
+                android:textAllCaps="false" />
+
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="Class"
+                android:textColor="#334155"
+                android:textStyle="bold"
+                android:layout_marginTop="14dp"
+                android:textSize="14sp" />
+
+            <EditText
+                android:id="@+id/etReportClass"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:hint="Enter class (e.g. 10)"
+                android:inputType="text"
+                android:singleLine="true" />
+
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="Section"
+                android:textColor="#334155"
+                android:textStyle="bold"
+                android:layout_marginTop="10dp"
+                android:textSize="14sp" />
+
+            <EditText
+                android:id="@+id/etReportSection"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:hint="Enter section (e.g. A)"
+                android:inputType="text"
+                android:singleLine="true" />
+
+            <Button
+                android:id="@+id/btnGenerateMonthlyReport"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="18dp"
+                android:text="Generate Report"
+                android:textAllCaps="false" />
+
+        </LinearLayout>
+
+        <!-- Summary -->
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="22dp"
+            android:text="Report Summary"
+            android:textColor="#172B4D"
+            android:textSize="20sp"
+            android:textStyle="bold" />
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:background="#FFFFFF"
+            android:padding="16dp"
+            android:layout_marginTop="10dp">
+
+            <TextView
+                android:id="@+id/tvReportTotalStudents"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="Total Students: 0"
+                android:textColor="#172B4D"
+                android:textSize="16sp"
+                android:padding="5dp" />
+
+            <TextView
+                android:id="@+id/tvReportPresentRecords"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="Present Records: 0"
+                android:textColor="#15803D"
+                android:textSize="16sp"
+                android:padding="5dp" />
+
+            <TextView
+                android:id="@+id/tvReportAbsentRecords"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="Absent Records: 0"
+                android:textColor="#B91C1C"
+                android:textSize="16sp"
+                android:padding="5dp" />
+
+            <TextView
+                android:id="@+id/tvReportPercentage"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="Overall Attendance: 0%"
+                android:textColor="#1D4ED8"
+                android:textSize="18sp"
+                android:textStyle="bold"
+                android:padding="5dp" />
+
+        </LinearLayout>
+
+        <!-- Student Report -->
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="22dp"
+            android:text="Student-wise Report"
+            android:textColor="#172B4D"
+            android:textSize="20sp"
+            android:textStyle="bold" />
+
+        <HorizontalScrollView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="10dp"
+            android:fillViewport="false">
+
+            <TableLayout
+                android:id="@+id/tableMonthlyReport"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:background="#FFFFFF"
+                android:stretchColumns="1">
+
+                <TableRow
+                    android:background="#DCE7F5">
+
+                    <TextView
+                        android:text="ID"
+                        android:textStyle="bold"
+                        android:textColor="#172B4D"
+                        android:padding="10dp" />
+
+                    <TextView
+                        android:text="Student Name"
+                        android:textStyle="bold"
+                        android:textColor="#172B4D"
+                        android:padding="10dp" />
+
+                    <TextView
+                        android:text="Present"
+                        android:textStyle="bold"
+                        android:textColor="#172B4D"
+                        android:padding="10dp" />
+
+                    <TextView
+                        android:text="Absent"
+                        android:textStyle="bold"
+                        android:textColor="#172B4D"
+                        android:padding="10dp" />
+
+                    <TextView
+                        android:text="Attendance %"
+                        android:textStyle="bold"
+                        android:textColor="#172B4D"
+                        android:padding="10dp" />
+
+                </TableRow>
+
+            </TableLayout>
+
+        </HorizontalScrollView>
+
+        <TextView
+            android:id="@+id/tvMonthlyReportMessage"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="Select filters and tap Generate Report."
+            android:textColor="#64748B"
+            android:gravity="center"
+            android:padding="20dp" />
+
+    </LinearLayout>
+
+</ScrollView>
