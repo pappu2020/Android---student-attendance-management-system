@@ -321,6 +321,14 @@
                     android:layout_marginTop="12dp" />
             </LinearLayout>
 
+
+
+
+
+            <!-- LOW ATTENDANCE STUDENTS -->
+
+
+
             <!-- MANAGEMENT MENU -->
             <TextView
                 android:layout_width="match_parent"
@@ -436,6 +444,33 @@
                     android:textSize="16sp"
                     android:textStyle="bold" />
             </LinearLayout>
+
+
+
+
+            <!-- CLASS-WISE LOW ATTENDANCE MENU -->
+            <LinearLayout
+                android:id="@+id/btnLowAttendance"
+                android:layout_width="match_parent"
+                android:layout_height="68dp"
+                android:layout_marginBottom="10dp"
+                android:orientation="horizontal"
+                android:gravity="center_vertical"
+                android:padding="16dp"
+                android:background="@drawable/bg_student_filter"
+                android:clickable="true"
+                android:focusable="true">
+
+                <TextView
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="Class-wise Low Attendance  →"
+                    android:textColor="#C62828"
+                    android:textSize="16sp"
+                    android:textStyle="bold" />
+
+            </LinearLayout>
+
 
             <Button
                 android:id="@+id/btnLogout"

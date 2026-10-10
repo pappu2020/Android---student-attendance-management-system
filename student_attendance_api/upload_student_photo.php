@@ -1,248 +1,208 @@
+
 <?php
 
 header("Content-Type: application/json; charset=UTF-8");
 
-require_once "db.php";
+require_once "auth.php";
 
+mysqli_report(MYSQLI_REPORT_ERROR | MYSQLI_REPORT_STRICT);
 
-if ($_SERVER["REQUEST_METHOD"] !== "POST") {
+$uploadedFilePath = null;
 
-    echo json_encode([
-        "success" => false,
-        "message" => "Only POST method is allowed"
-    ]);
+try {
 
-    exit;
-}
+    // Only POST requests are allowed.
+    if ($_SERVER["REQUEST_METHOD"] !== "POST") {
+        http_response_code(405);
 
+        echo json_encode([
+            "success" => false,
+            "message" => "Only POST method is allowed"
+        ], JSON_UNESCAPED_UNICODE);
 
-// ---------------------------------------------------------
-// Student ID
-// ---------------------------------------------------------
+        exit;
+    }
 
-$student_id = isset($_POST["student_id"])
-    ? trim($_POST["student_id"])
-    : "";
+    // Only administrators can upload or change student photos.
+    $user = requireAdmin();
 
+    // Read student ID.
+    $id = trim($_POST["student_id"] ?? "");
 
-if ($student_id === "") {
+    if ($id === "" || !ctype_digit($id) || (int)$id < 1) {
+        http_response_code(400);
 
-    echo json_encode([
-        "success" => false,
-        "message" => "Student ID is required"
-    ]);
+        echo json_encode([
+            "success" => false,
+            "message" => "Invalid student ID"
+        ], JSON_UNESCAPED_UNICODE);
 
-    exit;
-}
+        exit;
+    }
 
+    $studentId = (int)$id;
 
-// ---------------------------------------------------------
-// Check Image
-// ---------------------------------------------------------
+    // Validate uploaded file.
+    if (!isset($_FILES["photo"])) {
+        http_response_code(400);
 
-if (!isset($_FILES["photo"])) {
+        echo json_encode([
+            "success" => false,
+            "message" => "Photo file is required"
+        ], JSON_UNESCAPED_UNICODE);
 
-    echo json_encode([
-        "success" => false,
-        "message" => "Photo is required"
-    ]);
+        exit;
+    }
 
-    exit;
-}
+    $file = $_FILES["photo"];
 
+    if ($file["error"] !== UPLOAD_ERR_OK) {
+        http_response_code(400);
 
-$file = $_FILES["photo"];
+        echo json_encode([
+            "success" => false,
+            "message" => "Photo upload failed"
+        ], JSON_UNESCAPED_UNICODE);
 
+        exit;
+    }
 
-// ---------------------------------------------------------
-// Check Upload Error
-// ---------------------------------------------------------
+    // Maximum file size: 5 MB.
+    if ($file["size"] <= 0 || $file["size"] > 5 * 1024 * 1024) {
+        http_response_code(400);
 
-if ($file["error"] !== UPLOAD_ERR_OK) {
+        echo json_encode([
+            "success" => false,
+            "message" => "Photo must be smaller than 5 MB"
+        ], JSON_UNESCAPED_UNICODE);
 
-    echo json_encode([
-        "success" => false,
-        "message" => "Photo upload failed"
-    ]);
+        exit;
+    }
 
-    exit;
-}
-
-
-// ---------------------------------------------------------
-// Maximum File Size
-// 5 MB
-// ---------------------------------------------------------
-
-$maxSize = 5 * 1024 * 1024;
-
-if ($file["size"] > $maxSize) {
-
-    echo json_encode([
-        "success" => false,
-        "message" => "Photo size must be less than 5 MB"
-    ]);
-
-    exit;
-}
-
-
-// ---------------------------------------------------------
-// Check Image Type
-// ---------------------------------------------------------
-
-$imageInfo = getimagesize(
-    $file["tmp_name"]
-);
-
-if ($imageInfo === false) {
-
-    echo json_encode([
-        "success" => false,
-        "message" => "Selected file is not a valid image"
-    ]);
-
-    exit;
-}
-
-
-// ---------------------------------------------------------
-// Allowed Extensions
-// ---------------------------------------------------------
-
-$allowedTypes = [
-    "image/jpeg" => "jpg",
-    "image/png"  => "png",
-    "image/webp" => "webp"
-];
-
-
-$mimeType = $imageInfo["mime"];
-
-
-if (!isset($allowedTypes[$mimeType])) {
-
-    echo json_encode([
-        "success" => false,
-        "message" => "Only JPG, PNG and WEBP images are allowed"
-    ]);
-
-    exit;
-}
-
-
-$extension =
-    $allowedTypes[$mimeType];
-
-
-// ---------------------------------------------------------
-// Upload Directory
-// ---------------------------------------------------------
-
-$uploadDirectory =
-    __DIR__ . "/uploads/students/";
-
-
-if (!is_dir($uploadDirectory)) {
-
-    mkdir(
-        $uploadDirectory,
-        0777,
-        true
+    // Confirm that the student exists.
+    $checkStmt = $conn->prepare(
+        "SELECT id FROM students WHERE id = ? LIMIT 1"
     );
-}
 
+    $checkStmt->bind_param("i", $studentId);
+    $checkStmt->execute();
 
-// ---------------------------------------------------------
-// Generate Unique Filename
-// ---------------------------------------------------------
+    $studentExists = $checkStmt->get_result()->num_rows > 0;
 
-$fileName =
-    "student_" .
-    $student_id .
-    "_" .
-    time() .
-    "_" .
-    uniqid() .
-    "." .
-    $extension;
+    $checkStmt->close();
 
+    if (!$studentExists) {
+        http_response_code(404);
 
-$filePath =
-    $uploadDirectory .
-    $fileName;
+        echo json_encode([
+            "success" => false,
+            "message" => "Student not found"
+        ], JSON_UNESCAPED_UNICODE);
 
+        exit;
+    }
 
-// ---------------------------------------------------------
-// Move File
-// ---------------------------------------------------------
+    // Verify actual image content rather than trusting its extension.
+    $imageInfo = @getimagesize($file["tmp_name"]);
 
-if (!move_uploaded_file(
-    $file["tmp_name"],
-    $filePath
-)) {
+    if ($imageInfo === false) {
+        http_response_code(400);
 
-    echo json_encode([
-        "success" => false,
-        "message" => "Unable to save photo"
-    ]);
+        echo json_encode([
+            "success" => false,
+            "message" => "Uploaded file is not a valid image"
+        ], JSON_UNESCAPED_UNICODE);
 
-    exit;
-}
+        exit;
+    }
 
+    $allowedTypes = [
+        IMAGETYPE_JPEG => "jpg",
+        IMAGETYPE_PNG  => "png",
+        IMAGETYPE_WEBP => "webp"
+    ];
 
-// ---------------------------------------------------------
-// Save Filename in Database
-// ---------------------------------------------------------
+    $imageType = $imageInfo[2];
 
-$sql = "
-    UPDATE students
-    SET photo = ?
-    WHERE id = ?
-";
+    if (!isset($allowedTypes[$imageType])) {
+        http_response_code(400);
 
+        echo json_encode([
+            "success" => false,
+            "message" => "Only JPG, PNG and WEBP images are allowed"
+        ], JSON_UNESCAPED_UNICODE);
 
-$stmt =
-    $conn->prepare($sql);
+        exit;
+    }
 
+    // Create the upload directory if it does not exist.
+    $uploadDirectory = __DIR__ . "/uploads/students";
 
-if (!$stmt) {
+    if (
+        !is_dir($uploadDirectory) &&
+        !mkdir($uploadDirectory, 0755, true) &&
+        !is_dir($uploadDirectory)
+    ) {
+        throw new RuntimeException("Unable to create upload directory");
+    }
 
-    echo json_encode([
-        "success" => false,
-        "message" => "Database query preparation failed"
-    ]);
+    // Generate a random filename to prevent collisions.
+    $extension = $allowedTypes[$imageType];
 
-    exit;
-}
+    $fileName = "student_" . $studentId . "_" .
+        bin2hex(random_bytes(16)) . "." . $extension;
 
+    $destination = $uploadDirectory . "/" . $fileName;
 
-$stmt->bind_param(
-    "si",
-    $fileName,
-    $student_id
-);
+    // Move uploaded file into its destination.
+    if (!move_uploaded_file($file["tmp_name"], $destination)) {
+        throw new RuntimeException("Unable to save uploaded image");
+    }
 
+    $uploadedFilePath = $destination;
 
-if ($stmt->execute()) {
+    // Store only the filename in the database.
+    $updateStmt = $conn->prepare(
+        "UPDATE students SET photo = ? WHERE id = ?"
+    );
+
+    $updateStmt->bind_param("si", $fileName, $studentId);
+    $updateStmt->execute();
+    $updateStmt->close();
 
     echo json_encode([
         "success" => true,
-        "message" => "Photo uploaded successfully",
+        "message" => "Student photo uploaded successfully",
+        "student_id" => (string)$studentId,
         "photo" => $fileName
-    ]);
+    ], JSON_UNESCAPED_UNICODE);
 
-} else {
+    $uploadedFilePath = null;
+
+} catch (Throwable $e) {
+
+    // Remove the new file if the database update failed.
+    if (
+        $uploadedFilePath !== null &&
+        is_file($uploadedFilePath)
+    ) {
+        @unlink($uploadedFilePath);
+    }
+
+    error_log("upload_student_photo.php error: " . $e->getMessage());
+
+    http_response_code(500);
 
     echo json_encode([
         "success" => false,
-        "message" => "Photo database update failed"
-    ]);
+        "message" => "Unable to upload student photo"
+    ], JSON_UNESCAPED_UNICODE);
+
+} finally {
+
+    if (isset($conn) && $conn instanceof mysqli) {
+        $conn->close();
+    }
 }
-
-
-$stmt->close();
-
-$conn->close();
 
 ?>

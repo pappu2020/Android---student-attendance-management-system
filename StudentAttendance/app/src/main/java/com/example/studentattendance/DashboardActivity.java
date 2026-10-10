@@ -1,7 +1,9 @@
+
 package com.example.studentattendance;
 
 import android.app.DatePickerDialog;
 import android.content.Intent;
+import android.content.SharedPreferences;
 import android.graphics.Color;
 import android.os.Bundle;
 import android.os.Handler;
@@ -52,6 +54,9 @@ public class DashboardActivity extends AppCompatActivity {
     private static final String WEEKLY_URL =
             BASE_URL + "get_weekly_attendance.php";
 
+    private static final String PREFS_NAME =
+            "StudentAttendanceAuth";
+
     private SwipeRefreshLayout swipeRefreshDashboard;
 
     private BarChart chartAttendance;
@@ -76,6 +81,7 @@ public class DashboardActivity extends AppCompatActivity {
     private LinearLayout btnAttendance;
     private LinearLayout btnHistory;
     private LinearLayout btnReport;
+    private LinearLayout btnLowAttendance;
 
     private String selectedDate;
 
@@ -120,7 +126,6 @@ public class DashboardActivity extends AppCompatActivity {
         );
 
         chartAttendance = findViewById(R.id.chartAttendance);
-
         chartWeeklyAttendance =
                 findViewById(R.id.chartWeeklyAttendance);
 
@@ -130,7 +135,6 @@ public class DashboardActivity extends AppCompatActivity {
 
         tvStatTotalStudents =
                 findViewById(R.id.tvStatTotalStudents);
-
         tvStatPresent = findViewById(R.id.tvStatPresent);
         tvStatAbsent = findViewById(R.id.tvStatAbsent);
         tvStatNotMarked = findViewById(R.id.tvStatNotMarked);
@@ -147,6 +151,7 @@ public class DashboardActivity extends AppCompatActivity {
         btnAttendance = findViewById(R.id.btnAttendance);
         btnHistory = findViewById(R.id.btnHistory);
         btnReport = findViewById(R.id.btnReport);
+        btnLowAttendance = findViewById(R.id.btnLowAttendance);
         btnLogout = findViewById(R.id.btnLogout);
     }
 
@@ -154,11 +159,18 @@ public class DashboardActivity extends AppCompatActivity {
 
     private void displayUserInformation() {
 
-        String userName =
-                getIntent().getStringExtra("user_name");
+        SharedPreferences preferences =
+                getSharedPreferences(PREFS_NAME, MODE_PRIVATE);
 
-        String userRole =
-                getIntent().getStringExtra("user_role");
+        String userName = preferences.getString(
+                "user_name",
+                getIntent().getStringExtra("user_name")
+        );
+
+        String userRole = preferences.getString(
+                "user_role",
+                getIntent().getStringExtra("user_role")
+        );
 
         if (userName != null && !userName.trim().isEmpty()) {
             tvWelcome.setText("Welcome, " + userName);
@@ -205,7 +217,6 @@ public class DashboardActivity extends AppCompatActivity {
             ));
         });
 
-        // Open the class/section monthly attendance report.
         btnReport.setOnClickListener(view -> {
             Intent intent = new Intent(
                     DashboardActivity.this,
@@ -225,7 +236,37 @@ public class DashboardActivity extends AppCompatActivity {
             startActivity(intent);
         });
 
+        // NEW: CLASS-WISE LOW ATTENDANCE
+
+        btnLowAttendance.setOnClickListener(view -> {
+            Intent intent = new Intent(
+                    DashboardActivity.this,
+                    ClassWiseLowAttendanceActivity.class
+            );
+
+            intent.putExtra(
+                    "user_name",
+                    getIntent().getStringExtra("user_name")
+            );
+
+            intent.putExtra(
+                    "user_role",
+                    getIntent().getStringExtra("user_role")
+            );
+
+            startActivity(intent);
+        });
+
+        // LOGOUT
+
         btnLogout.setOnClickListener(view -> {
+
+            getSharedPreferences(
+                    PREFS_NAME,
+                    MODE_PRIVATE
+            ).edit()
+                    .clear()
+                    .apply();
 
             Toast.makeText(
                     DashboardActivity.this,
@@ -275,9 +316,8 @@ public class DashboardActivity extends AppCompatActivity {
                 if (parsed != null) {
                     calendar.setTime(parsed);
                 }
-
             } catch (Exception ignored) {
-                // Keep today's date if parsing fails.
+                // Use today's date if parsing fails.
             }
 
             DatePickerDialog dialog = new DatePickerDialog(
@@ -285,23 +325,10 @@ public class DashboardActivity extends AppCompatActivity {
                     (datePicker, year, month, day) -> {
 
                         Calendar chosen = Calendar.getInstance();
+                        chosen.set(year, month, day, 0, 0, 0);
+                        chosen.set(Calendar.MILLISECOND, 0);
 
-                        chosen.set(
-                                year,
-                                month,
-                                day,
-                                0,
-                                0,
-                                0
-                        );
-
-                        chosen.set(
-                                Calendar.MILLISECOND,
-                                0
-                        );
-
-                        selectedDate =
-                                formatDate(chosen.getTime());
+                        selectedDate = formatDate(chosen.getTime());
 
                         updateSelectedDateLabel();
                         loadSelectedDateStats();
@@ -311,7 +338,6 @@ public class DashboardActivity extends AppCompatActivity {
                     calendar.get(Calendar.DAY_OF_MONTH)
             );
 
-            // Do not allow selecting a future date.
             dialog.getDatePicker().setMaxDate(
                     System.currentTimeMillis()
             );
@@ -321,7 +347,6 @@ public class DashboardActivity extends AppCompatActivity {
     }
 
     private void updateSelectedDateLabel() {
-
         tvSelectedAttendanceDate.setText(
                 "Selected Date: " + selectedDate
         );
@@ -394,7 +419,6 @@ public class DashboardActivity extends AppCompatActivity {
                     return;
                 }
 
-                // Ignore an older response after another date is selected.
                 if (requestVersion == dateRequestVersion) {
                     displayDateStats(response, requestedDate);
                 }
@@ -426,12 +450,10 @@ public class DashboardActivity extends AppCompatActivity {
             JSONObject json = new JSONObject(response);
 
             if (!json.optBoolean("success", false)) {
-                showStatsError(
-                        json.optString(
-                                "message",
-                                "Failed to load attendance statistics."
-                        )
-                );
+                showStatsError(json.optString(
+                        "message",
+                        "Failed to load attendance statistics."
+                ));
                 return;
             }
 
@@ -448,10 +470,7 @@ public class DashboardActivity extends AppCompatActivity {
                     json.optInt("not_marked_count", 0);
 
             double percentage =
-                    json.optDouble(
-                            "attendance_percentage",
-                            0.0
-                    );
+                    json.optDouble("attendance_percentage", 0.0);
 
             tvStatTotalStudents.setText(
                     String.valueOf(totalStudents)
@@ -469,29 +488,20 @@ public class DashboardActivity extends AppCompatActivity {
                     String.valueOf(notMarked)
             );
 
-            tvStatPercentage.setText(
-                    String.format(
-                            Locale.getDefault(),
-                            "%.1f%%",
-                            percentage
-                    )
-            );
+            tvStatPercentage.setText(String.format(
+                    Locale.getDefault(),
+                    "%.1f%%",
+                    percentage
+            ));
 
-            updateDailyChart(
-                    present,
-                    absent,
-                    requestedDate
-            );
+            updateDailyChart(present, absent, requestedDate);
 
         } catch (Exception e) {
-            showStatsError(
-                    "Invalid attendance response."
-            );
+            showStatsError("Invalid attendance response.");
         }
     }
 
     private void setStatisticsLoading() {
-
         tvStatTotalStudents.setText("...");
         tvStatPresent.setText("...");
         tvStatAbsent.setText("...");
@@ -509,13 +519,8 @@ public class DashboardActivity extends AppCompatActivity {
 
         ArrayList<BarEntry> entries = new ArrayList<>();
 
-        entries.add(
-                new BarEntry(0f, Math.max(0, present))
-        );
-
-        entries.add(
-                new BarEntry(1f, Math.max(0, absent))
-        );
+        entries.add(new BarEntry(0f, Math.max(0, present)));
+        entries.add(new BarEntry(1f, Math.max(0, absent)));
 
         BarDataSet dataSet =
                 new BarDataSet(entries, "Students");
@@ -546,8 +551,8 @@ public class DashboardActivity extends AppCompatActivity {
 
         Description description = new Description();
         description.setText("Date: " + date);
-
         chartAttendance.setDescription(description);
+
         chartAttendance.getLegend().setEnabled(false);
         chartAttendance.setFitBars(true);
         chartAttendance.notifyDataSetChanged();
@@ -599,21 +604,17 @@ public class DashboardActivity extends AppCompatActivity {
             JSONObject json = new JSONObject(response);
 
             if (!json.optBoolean("success", false)) {
-                showWeeklyChartError(
-                        json.optString(
-                                "message",
-                                "Weekly attendance unavailable."
-                        )
-                );
+                showWeeklyChartError(json.optString(
+                        "message",
+                        "Weekly attendance unavailable."
+                ));
                 return;
             }
 
             JSONArray weeklyData =
                     json.optJSONArray("weekly_data");
 
-            if (weeklyData == null
-                    || weeklyData.length() == 0) {
-
+            if (weeklyData == null || weeklyData.length() == 0) {
                 showWeeklyChartError(
                         "No weekly attendance data available."
                 );
@@ -631,110 +632,60 @@ public class DashboardActivity extends AppCompatActivity {
 
             for (int i = 0; i < weeklyData.length(); i++) {
 
-                JSONObject item =
-                        weeklyData.getJSONObject(i);
+                JSONObject item = weeklyData.getJSONObject(i);
 
-                labels.add(
-                        item.optString("day", "")
-                );
+                labels.add(item.optString("day", ""));
 
-                presentEntries.add(
-                        new BarEntry(
-                                i,
-                                Math.max(
-                                        0,
-                                        item.optInt(
-                                                "present_count",
-                                                0
-                                        )
-                                )
-                        )
-                );
+                presentEntries.add(new BarEntry(
+                        i,
+                        Math.max(0, item.optInt("present_count", 0))
+                ));
 
-                absentEntries.add(
-                        new BarEntry(
-                                i,
-                                Math.max(
-                                        0,
-                                        item.optInt(
-                                                "absent_count",
-                                                0
-                                        )
-                                )
-                        )
-                );
+                absentEntries.add(new BarEntry(
+                        i,
+                        Math.max(0, item.optInt("absent_count", 0))
+                ));
             }
 
             BarDataSet presentSet =
-                    new BarDataSet(
-                            presentEntries,
-                            "Present"
-                    );
+                    new BarDataSet(presentEntries, "Present");
 
-            presentSet.setColor(
-                    Color.rgb(46, 125, 50)
-            );
-
+            presentSet.setColor(Color.rgb(46, 125, 50));
             presentSet.setValueTextSize(9f);
 
             BarDataSet absentSet =
-                    new BarDataSet(
-                            absentEntries,
-                            "Absent"
-                    );
+                    new BarDataSet(absentEntries, "Absent");
 
-            absentSet.setColor(
-                    Color.rgb(198, 40, 40)
-            );
-
+            absentSet.setColor(Color.rgb(198, 40, 40));
             absentSet.setValueTextSize(9f);
 
-            BarData data =
-                    new BarData(presentSet, absentSet);
+            BarData data = new BarData(presentSet, absentSet);
 
             float groupSpace = 0.30f;
             float barSpace = 0.05f;
             float barWidth = 0.30f;
 
             data.setBarWidth(barWidth);
-
             chartWeeklyAttendance.setData(data);
 
-            XAxis xAxis =
-                    chartWeeklyAttendance.getXAxis();
+            XAxis xAxis = chartWeeklyAttendance.getXAxis();
 
             xAxis.setValueFormatter(
                     new IndexAxisValueFormatter(labels)
             );
 
-            xAxis.setPosition(
-                    XAxis.XAxisPosition.BOTTOM
-            );
-
+            xAxis.setPosition(XAxis.XAxisPosition.BOTTOM);
             xAxis.setGranularity(1f);
             xAxis.setGranularityEnabled(true);
             xAxis.setCenterAxisLabels(true);
             xAxis.setDrawGridLines(false);
             xAxis.setAxisMinimum(0f);
-            xAxis.setAxisMaximum(
-                    (float) labels.size()
-            );
+            xAxis.setAxisMaximum((float) labels.size());
 
-            chartWeeklyAttendance
-                    .getAxisLeft()
-                    .setAxisMinimum(0f);
-
-            chartWeeklyAttendance
-                    .getAxisRight()
-                    .setEnabled(false);
-
-            chartWeeklyAttendance
-                    .getDescription()
-                    .setEnabled(false);
-
-            chartWeeklyAttendance
-                    .getLegend()
-                    .setEnabled(true);
+            chartWeeklyAttendance.getAxisLeft().setAxisMinimum(0f);
+            chartWeeklyAttendance.getAxisRight().setEnabled(false);
+            chartWeeklyAttendance.getDescription().setEnabled(false);
+            chartWeeklyAttendance.getLegend().setEnabled(true);
 
             chartWeeklyAttendance.groupBars(
                     0f,
@@ -767,10 +718,9 @@ public class DashboardActivity extends AppCompatActivity {
     ) {
 
         try {
-            String body =
-                    URLEncoder.encode(key, "UTF-8")
-                            + "="
-                            + URLEncoder.encode(value, "UTF-8");
+            String body = URLEncoder.encode(key, "UTF-8")
+                    + "="
+                    + URLEncoder.encode(value, "UTF-8");
 
             return sendPost(endpoint, body);
 
@@ -779,12 +729,9 @@ public class DashboardActivity extends AppCompatActivity {
         }
     }
 
-    // SHARED HTTP METHOD
+    // SHARED HTTP METHOD WITH BEARER TOKEN
 
-    private String sendPost(
-            String endpoint,
-            String body
-    ) {
+    private String sendPost(String endpoint, String body) {
 
         HttpURLConnection connection = null;
 
@@ -804,15 +751,24 @@ public class DashboardActivity extends AppCompatActivity {
                     "application/x-www-form-urlencoded; charset=UTF-8"
             );
 
-            try (OutputStream output =
-                         connection.getOutputStream()) {
+            SharedPreferences preferences =
+                    getSharedPreferences(PREFS_NAME, MODE_PRIVATE);
 
+            String token = preferences.getString("auth_token", "");
+
+            if (token != null && !token.trim().isEmpty()) {
+                connection.setRequestProperty(
+                        "Authorization",
+                        "Bearer " + token
+                );
+            }
+
+            try (OutputStream output = connection.getOutputStream()) {
                 output.write(body.getBytes("UTF-8"));
                 output.flush();
             }
 
-            int responseCode =
-                    connection.getResponseCode();
+            int responseCode = connection.getResponseCode();
 
             InputStream input =
                     (responseCode >= 200 && responseCode < 300)
@@ -824,16 +780,11 @@ public class DashboardActivity extends AppCompatActivity {
                         + responseCode;
             }
 
-            StringBuilder response =
-                    new StringBuilder();
+            StringBuilder response = new StringBuilder();
 
-            try (BufferedReader reader =
-                         new BufferedReader(
-                                 new InputStreamReader(
-                                         input,
-                                         "UTF-8"
-                                 )
-                         )) {
+            try (BufferedReader reader = new BufferedReader(
+                    new InputStreamReader(input, "UTF-8")
+            )) {
 
                 String line;
 
@@ -870,11 +821,9 @@ public class DashboardActivity extends AppCompatActivity {
         tvStatPercentage.setText("--%");
 
         chartAttendance.clear();
-
         chartAttendance.setNoDataText(
                 "Daily attendance unavailable"
         );
-
         chartAttendance.invalidate();
 
         Toast.makeText(
@@ -885,7 +834,6 @@ public class DashboardActivity extends AppCompatActivity {
     }
 
     private void showWeeklyChartError(String message) {
-
         chartWeeklyAttendance.clear();
         chartWeeklyAttendance.setNoDataText(message);
         chartWeeklyAttendance.invalidate();
@@ -894,7 +842,6 @@ public class DashboardActivity extends AppCompatActivity {
     // REFRESH INDICATOR
 
     private void beginRequest() {
-
         pendingRequests++;
 
         if (swipeRefreshDashboard != null) {
@@ -903,9 +850,7 @@ public class DashboardActivity extends AppCompatActivity {
     }
 
     private void finishRequest() {
-
-        pendingRequests =
-                Math.max(0, pendingRequests - 1);
+        pendingRequests = Math.max(0, pendingRequests - 1);
 
         if (swipeRefreshDashboard != null) {
             swipeRefreshDashboard.setRefreshing(

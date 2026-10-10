@@ -1,135 +1,128 @@
+
 <?php
 
 header("Content-Type: application/json; charset=UTF-8");
 
-require_once "db.php";
+require_once "auth.php";
 
+mysqli_report(MYSQLI_REPORT_ERROR | MYSQLI_REPORT_STRICT);
 
-// =====================================================
-// Only POST Request Allowed
-// =====================================================
-
+// Allow POST requests only.
 if ($_SERVER["REQUEST_METHOD"] !== "POST") {
-
     http_response_code(405);
 
     echo json_encode([
         "success" => false,
         "message" => "Only POST method is allowed"
-    ]);
+    ], JSON_UNESCAPED_UNICODE);
 
     exit;
 }
 
+try {
 
-// =====================================================
-// Get Student ID
-// =====================================================
+    // Only authenticated administrators can delete students.
+    $user = requireAdmin();
 
-$id = isset($_POST["id"])
-    ? trim($_POST["id"])
-    : "";
+    // Get student ID.
+    $id = trim($_POST["id"] ?? "");
 
+    // Validate student ID.
+    if (
+        $id === "" ||
+        !ctype_digit($id) ||
+        (int) $id < 1
+    ) {
+        http_response_code(400);
 
-// =====================================================
-// Validation
-// =====================================================
+        echo json_encode([
+            "success" => false,
+            "message" => "Invalid student ID"
+        ], JSON_UNESCAPED_UNICODE);
 
-if ($id === "") {
+        exit;
+    }
 
-    http_response_code(400);
+    $studentId = (int) $id;
 
-    echo json_encode([
-        "success" => false,
-        "message" => "Student ID is required"
-    ]);
+    // Check whether the student exists.
+    $checkSql = "
+        SELECT id
+        FROM students
+        WHERE id = ?
+        LIMIT 1
+    ";
 
-    exit;
-}
+    $checkStmt = $conn->prepare($checkSql);
+    $checkStmt->bind_param("i", $studentId);
+    $checkStmt->execute();
 
-
-// =====================================================
-// Check Student Exists
-// =====================================================
-
-$checkSql =
-    "SELECT id FROM students WHERE id = ?";
-
-$checkStmt =
-    $conn->prepare($checkSql);
-
-$checkStmt->bind_param(
-    "i",
-    $id
-);
-
-$checkStmt->execute();
-
-$result =
-    $checkStmt->get_result();
-
-
-if ($result->num_rows === 0) {
-
-    echo json_encode([
-        "success" => false,
-        "message" => "Student not found"
-    ]);
+    $result = $checkStmt->get_result();
+    $studentExists = $result->num_rows > 0;
 
     $checkStmt->close();
-    $conn->close();
 
-    exit;
-}
+    if (!$studentExists) {
+        http_response_code(404);
 
+        echo json_encode([
+            "success" => false,
+            "message" => "Student not found"
+        ], JSON_UNESCAPED_UNICODE);
 
-$checkStmt->close();
+        exit;
+    }
 
+    // Delete the student record.
+    $deleteSql = "
+        DELETE FROM students
+        WHERE id = ?
+    ";
 
-// =====================================================
-// Delete Student
-// =====================================================
+    $deleteStmt = $conn->prepare($deleteSql);
+    $deleteStmt->bind_param("i", $studentId);
+    $deleteStmt->execute();
 
-$deleteSql =
-    "DELETE FROM students WHERE id = ?";
+    $deleted = $deleteStmt->affected_rows > 0;
 
-$deleteStmt =
-    $conn->prepare($deleteSql);
+    $deleteStmt->close();
 
-$deleteStmt->bind_param(
-    "i",
-    $id
-);
+    if (!$deleted) {
+        http_response_code(409);
 
+        echo json_encode([
+            "success" => false,
+            "message" => "Student could not be deleted"
+        ], JSON_UNESCAPED_UNICODE);
 
-// =====================================================
-// Execute Delete
-// =====================================================
+        exit;
+    }
 
-if ($deleteStmt->execute()) {
-
+    // Success response.
     echo json_encode([
         "success" => true,
-        "message" => "Student deleted successfully"
-    ]);
+        "message" => "Student deleted successfully",
+        "id" => (string) $studentId
+    ], JSON_UNESCAPED_UNICODE);
 
-} else {
+} catch (Throwable $e) {
+
+    error_log(
+        "delete_student.php error: " . $e->getMessage()
+    );
 
     http_response_code(500);
 
     echo json_encode([
         "success" => false,
-        "message" => "Failed to delete student"
-    ]);
+        "message" => "Unable to delete student. Check whether attendance records prevent deletion."
+    ], JSON_UNESCAPED_UNICODE);
+
+} finally {
+
+    if (isset($conn) && $conn instanceof mysqli) {
+        $conn->close();
+    }
 }
-
-
-// =====================================================
-// Close Connection
-// =====================================================
-
-$deleteStmt->close();
-
-$conn->close();
 
 ?>

@@ -1,5 +1,8 @@
+
 package com.example.studentattendance;
 
+import android.content.Intent;
+import android.content.SharedPreferences;
 import android.os.Bundle;
 import android.text.TextUtils;
 import android.util.Patterns;
@@ -8,7 +11,6 @@ import android.widget.EditText;
 import android.widget.ProgressBar;
 import android.widget.TextView;
 import android.widget.Toast;
-import android.content.Intent;
 
 import androidx.appcompat.app.AppCompatActivity;
 
@@ -21,6 +23,8 @@ import java.io.OutputStream;
 import java.net.HttpURLConnection;
 import java.net.URL;
 import java.net.URLEncoder;
+import java.nio.charset.StandardCharsets;
+import java.util.Locale;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
@@ -28,11 +32,8 @@ public class MainActivity extends AppCompatActivity {
 
     private EditText etEmail;
     private EditText etPassword;
-
     private Button btnLogin;
-
     private ProgressBar progressBar;
-
     private TextView tvMessage;
 
     private final ExecutorService executorService =
@@ -41,23 +42,28 @@ public class MainActivity extends AppCompatActivity {
     private static final String LOGIN_URL =
             "http://10.0.2.2/student_attendance_api/login.php";
 
+    private static final String PREFS_NAME =
+            "StudentAttendanceAuth";
+
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
 
+        // Always show the login screen when this activity starts.
         setContentView(R.layout.activity_main);
 
         etEmail = findViewById(R.id.etEmail);
         etPassword = findViewById(R.id.etPassword);
-
         btnLogin = findViewById(R.id.btnLogin);
-
         progressBar = findViewById(R.id.progressBar);
-
         tvMessage = findViewById(R.id.tvMessage);
 
-        btnLogin.setOnClickListener(view -> {
+        progressBar.setVisibility(ProgressBar.GONE);
 
+        // Do not automatically navigate to Dashboard
+        // just because a token is already saved.
+
+        btnLogin.setOnClickListener(view -> {
             if (validateInput()) {
 
                 String email =
@@ -73,46 +79,34 @@ public class MainActivity extends AppCompatActivity {
 
     private boolean validateInput() {
 
-        String email =
-                etEmail.getText().toString().trim();
-
-        String password =
-                etPassword.getText().toString();
+        String email = etEmail.getText().toString().trim();
+        String password = etPassword.getText().toString();
 
         tvMessage.setText("");
 
         if (TextUtils.isEmpty(email)) {
-
             etEmail.setError("Email is required");
             etEmail.requestFocus();
-
             return false;
         }
 
         if (!Patterns.EMAIL_ADDRESS.matcher(email).matches()) {
-
             etEmail.setError("Enter a valid email");
             etEmail.requestFocus();
-
             return false;
         }
 
         if (TextUtils.isEmpty(password)) {
-
             etPassword.setError("Password is required");
             etPassword.requestFocus();
-
             return false;
         }
 
         if (password.length() < 6) {
-
             etPassword.setError(
                     "Password must contain at least 6 characters"
             );
-
             etPassword.requestFocus();
-
             return false;
         }
 
@@ -121,114 +115,163 @@ public class MainActivity extends AppCompatActivity {
 
     private void loginUser(String email, String password) {
 
-        runOnUiThread(() -> {
-
-            progressBar.setVisibility(ProgressBar.VISIBLE);
-
-            btnLogin.setEnabled(false);
-
-            tvMessage.setText("");
-
-        });
+        progressBar.setVisibility(ProgressBar.VISIBLE);
+        btnLogin.setEnabled(false);
+        tvMessage.setText("");
 
         executorService.execute(() -> {
 
             HttpURLConnection connection = null;
 
             try {
-
                 URL url = new URL(LOGIN_URL);
 
                 connection =
                         (HttpURLConnection) url.openConnection();
 
                 connection.setRequestMethod("POST");
-
                 connection.setConnectTimeout(10000);
-
                 connection.setReadTimeout(10000);
-
                 connection.setDoOutput(true);
 
                 connection.setRequestProperty(
                         "Content-Type",
-                        "application/x-www-form-urlencoded"
+                        "application/x-www-form-urlencoded; charset=UTF-8"
+                );
+
+                connection.setRequestProperty(
+                        "Accept",
+                        "application/json"
                 );
 
                 String postData =
-                        "email=" +
-                                URLEncoder.encode(email, "UTF-8") +
-                                "&password=" +
-                                URLEncoder.encode(password, "UTF-8");
-
-                OutputStream outputStream =
-                        connection.getOutputStream();
-
-                outputStream.write(
-                        postData.getBytes("UTF-8")
-                );
-
-                outputStream.flush();
-
-                outputStream.close();
-
-                int responseCode =
-                        connection.getResponseCode();
-
-                InputStream inputStream;
-
-                if (responseCode >= 200 &&
-                        responseCode < 300) {
-
-                    inputStream =
-                            connection.getInputStream();
-
-                } else {
-
-                    inputStream =
-                            connection.getErrorStream();
-                }
-
-                BufferedReader reader =
-                        new BufferedReader(
-                                new InputStreamReader(
-                                        inputStream
-                                )
+                        "email=" + URLEncoder.encode(email, "UTF-8")
+                                + "&password=" + URLEncoder.encode(
+                                password, "UTF-8"
                         );
 
-                StringBuilder response =
-                        new StringBuilder();
+                try (OutputStream outputStream =
+                             connection.getOutputStream()) {
 
-                String line;
-
-                while ((line = reader.readLine()) != null) {
-
-                    response.append(line);
-                }
-
-                reader.close();
-
-                String responseText =
-                        response.toString();
-
-                JSONObject jsonResponse =
-                        new JSONObject(responseText);
-
-                boolean success =
-                        jsonResponse.getBoolean("success");
-
-                String message =
-                        jsonResponse.getString("message");
-
-                runOnUiThread(() -> {
-
-                    progressBar.setVisibility(
-                            ProgressBar.GONE
+                    outputStream.write(
+                            postData.getBytes(StandardCharsets.UTF_8)
                     );
 
-                    btnLogin.setEnabled(true);
+                    outputStream.flush();
+                }
 
-                    if (success) {
+                int responseCode = connection.getResponseCode();
+
+                InputStream inputStream =
+                        (responseCode >= 200 && responseCode < 300)
+                                ? connection.getInputStream()
+                                : connection.getErrorStream();
+
+                if (inputStream == null) {
+                    throw new Exception(
+                            "Server returned HTTP " + responseCode
+                    );
+                }
+
+                StringBuilder response = new StringBuilder();
+
+                try (BufferedReader reader =
+                             new BufferedReader(
+                                     new InputStreamReader(
+                                             inputStream,
+                                             StandardCharsets.UTF_8
+                                     )
+                             )) {
+
+                    String line;
+
+                    while ((line = reader.readLine()) != null) {
+                        response.append(line);
+                    }
+                }
+
+                JSONObject jsonResponse =
+                        new JSONObject(response.toString());
+
+                boolean success =
+                        jsonResponse.optBoolean("success", false);
+
+                String message =
+                        jsonResponse.optString(
+                                "message",
+                                "Unable to login"
+                        );
+
+                if (responseCode < 200 || responseCode >= 300) {
+                    success = false;
+                }
+
+                if (success) {
+
+                    JSONObject user =
+                            jsonResponse.optJSONObject("user");
+
+                    String token =
+                            jsonResponse.optString("token", "");
+
+                    if (user == null
+                            || token.trim().isEmpty()
+                            || !user.has("name")
+                            || !user.has("role")) {
+
+                        throw new Exception(
+                                "Login response is missing token or user details"
+                        );
+                    }
+
+                    String userName =
+                            user.optString("name", "").trim();
+
+                    String userRole =
+                            user.optString("role", "")
+                                    .trim()
+                                    .toLowerCase(Locale.ROOT);
+
+                    if (userName.isEmpty()
+                            || (!userRole.equals("admin")
+                            && !userRole.equals("teacher"))) {
+
+                        throw new Exception(
+                                "Invalid user name or role from server"
+                        );
+                    }
+
+                    // Save the authenticated session.
+                    SharedPreferences preferences =
+                            getSharedPreferences(
+                                    PREFS_NAME,
+                                    MODE_PRIVATE
+                            );
+
+                    boolean saved = preferences.edit()
+                            .putString("auth_token", token)
+                            .putString("user_name", userName)
+                            .putString("user_role", userRole)
+                            .commit();
+
+                    if (!saved) {
+                        throw new Exception(
+                                "Could not save login session"
+                        );
+                    }
+
+                    final String finalName = userName;
+                    final String finalRole = userRole;
+                    final String finalMessage = message;
+
+                    runOnUiThread(() -> {
+
+                        if (isFinishing() || isDestroyed()) {
+                            return;
+                        }
+
+                        progressBar.setVisibility(ProgressBar.GONE);
+                        btnLogin.setEnabled(true);
 
                         tvMessage.setTextColor(
                                 getResources().getColor(
@@ -236,52 +279,29 @@ public class MainActivity extends AppCompatActivity {
                                 )
                         );
 
-                        tvMessage.setText(message);
+                        tvMessage.setText(finalMessage);
 
                         Toast.makeText(
                                 MainActivity.this,
-                                "Login Successful",
+                                "Login successful",
                                 Toast.LENGTH_SHORT
                         ).show();
 
-                        try {
+                        openDashboard(finalName, finalRole);
+                    });
 
-                            JSONObject user =
-                                    jsonResponse.getJSONObject("user");
+                } else {
 
-                            String userName =
-                                    user.getString("name");
+                    final String errorMessage = message;
 
-                            String userRole =
-                                    user.getString("role");
+                    runOnUiThread(() -> {
 
-                            Intent intent =
-                                    new Intent(
-                                            MainActivity.this,
-                                            DashboardActivity.class
-                                    );
-
-                            intent.putExtra(
-                                    "user_name",
-                                    userName
-                            );
-
-                            intent.putExtra(
-                                    "user_role",
-                                    userRole
-                            );
-
-                            startActivity(intent);
-
-                            finish();
-
-                        } catch (Exception e) {
-
-                            tvMessage.setText(
-                                    "Login successful, but user data is missing"
-                            );
+                        if (isFinishing() || isDestroyed()) {
+                            return;
                         }
-                    } else {
+
+                        progressBar.setVisibility(ProgressBar.GONE);
+                        btnLogin.setEnabled(true);
 
                         tvMessage.setTextColor(
                                 getResources().getColor(
@@ -289,20 +309,24 @@ public class MainActivity extends AppCompatActivity {
                                 )
                         );
 
-                        tvMessage.setText(message);
-
-                    }
-
-                });
+                        tvMessage.setText(errorMessage);
+                    });
+                }
 
             } catch (Exception e) {
 
+                final String errorMessage =
+                        e.getMessage() == null
+                                ? "Unexpected error occurred"
+                                : e.getMessage();
+
                 runOnUiThread(() -> {
 
-                    progressBar.setVisibility(
-                            ProgressBar.GONE
-                    );
+                    if (isFinishing() || isDestroyed()) {
+                        return;
+                    }
 
+                    progressBar.setVisibility(ProgressBar.GONE);
                     btnLogin.setEnabled(true);
 
                     tvMessage.setTextColor(
@@ -312,34 +336,41 @@ public class MainActivity extends AppCompatActivity {
                     );
 
                     tvMessage.setText(
-                            "Connection error: " +
-                                    e.getMessage()
+                            "Login error: " + errorMessage
                     );
 
                     Toast.makeText(
                             MainActivity.this,
-                            "Could not connect to server",
+                            "Could not complete login",
                             Toast.LENGTH_LONG
                     ).show();
-
                 });
 
             } finally {
-
                 if (connection != null) {
-
                     connection.disconnect();
                 }
             }
-
         });
+    }
+
+    private void openDashboard(String userName, String userRole) {
+
+        Intent intent = new Intent(
+                MainActivity.this,
+                DashboardActivity.class
+        );
+
+        intent.putExtra("user_name", userName);
+        intent.putExtra("user_role", userRole);
+
+        startActivity(intent);
+        finish();
     }
 
     @Override
     protected void onDestroy() {
-
         super.onDestroy();
-
-        executorService.shutdown();
+        executorService.shutdownNow();
     }
 }
