@@ -6,6 +6,7 @@ import android.graphics.Color;
 import android.graphics.Typeface;
 import android.graphics.drawable.GradientDrawable;
 import android.os.Bundle;
+import android.util.Log;
 import android.view.Gravity;
 import android.view.View;
 import android.widget.AdapterView;
@@ -20,10 +21,9 @@ import android.widget.Toast;
 
 import androidx.appcompat.app.AppCompatActivity;
 
-import com.android.volley.AuthFailureError;
-import com.android.volley.NetworkResponse;
 import com.android.volley.Request;
 import com.android.volley.RequestQueue;
+import com.android.volley.VolleyError;
 import com.android.volley.toolbox.StringRequest;
 import com.android.volley.toolbox.Volley;
 
@@ -31,26 +31,43 @@ import org.json.JSONArray;
 import org.json.JSONException;
 import org.json.JSONObject;
 
+import java.nio.charset.StandardCharsets;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Calendar;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Set;
 
 public class AttendanceActivity extends AppCompatActivity {
 
-    private static final String GET_STUDENTS_BY_CLASS_SECTION_URL =
-            "http://10.0.2.2/student_attendance_api/get_students_by_class_section.php";
+    private static final String BASE_URL =
+            "http://10.0.2.2/student_attendance_api/";
 
-    private static final String MARK_ATTENDANCE_URL =
-            "http://10.0.2.2/student_attendance_api/mark_attendance.php";
+    private static final String PREFS_NAME =
+            "StudentAttendanceAuth";
+
+    private static final String GET_CLASSES_URL =
+            BASE_URL + "get_attendance_classes.php";
+
+    private static final String GET_ROUTINES_URL =
+            BASE_URL + "get_attendance_routines.php";
+
+    private static final String GET_STUDENTS_URL =
+            BASE_URL + "get_students_by_class_section.php";
 
     private static final String GET_ATTENDANCE_URL =
-            "http://10.0.2.2/student_attendance_api/get_attendance.php";
+            BASE_URL + "get_attendance.php";
+
+    private static final String MARK_ATTENDANCE_URL =
+            BASE_URL + "mark_attendance.php";
 
     private Spinner spinnerClass;
     private Spinner spinnerSection;
+    private Spinner spinnerTime;
+    private Spinner spinnerSubject;
 
     private Button btnSelectDate;
     private Button btnSaveAttendance;
@@ -60,12 +77,61 @@ public class AttendanceActivity extends AppCompatActivity {
     private TextView tvAttendanceHint;
     private TextView tvPresentCount;
     private TextView tvAbsentCount;
+    private TextView tvAssignedTeacher;
 
     private LinearLayout llAttendanceList;
+
+    private RequestQueue requestQueue;
+    private Calendar calendar;
+
+    private String authToken = "";
+    private String userRole = "";
 
     private String selectedDate = "";
     private String selectedClass = "";
     private String selectedSection = "";
+    private String selectedRoutineId = "";
+
+    private boolean suppressClassCallback = false;
+    private boolean suppressSectionCallback = false;
+    private boolean suppressRoutineCallback = false;
+    private boolean isSaving = false;
+
+    /*
+     * Class spinner:
+     * Select Class
+     * MCA
+     * BCA
+     * B.Tech
+     *
+     * Section spinner:
+     * Select Section
+     * A
+     * B
+     *
+     * The sections displayed are filtered by the selected class.
+     */
+
+    private final ArrayList<String> classList =
+            new ArrayList<>();
+
+    private final ArrayList<String> sectionList =
+            new ArrayList<>();
+
+    /*
+     * Stores all class-section records received from PHP.
+     */
+    private final ArrayList<JSONObject> classSectionData =
+            new ArrayList<>();
+
+    private final ArrayList<String> timeList =
+            new ArrayList<>();
+
+    private final ArrayList<String> subjectList =
+            new ArrayList<>();
+
+    private final ArrayList<JSONObject> routineList =
+            new ArrayList<>();
 
     private final ArrayList<HashMap<String, String>> studentList =
             new ArrayList<>();
@@ -73,16 +139,60 @@ public class AttendanceActivity extends AppCompatActivity {
     private final HashMap<String, String> attendanceStatus =
             new HashMap<>();
 
-    private RequestQueue requestQueue;
-    private Calendar calendar;
-
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_attendance);
 
+        initializeViews();
+
+        SharedPreferences preferences =
+                getSharedPreferences(PREFS_NAME, MODE_PRIVATE);
+
+        authToken = preferences.getString("auth_token", "");
+
+        userRole = preferences.getString("user_role", "")
+                .trim()
+                .toLowerCase(Locale.ROOT);
+
+        if (authToken.trim().isEmpty()) {
+            Toast.makeText(
+                    this,
+                    "Session expired. Please login again.",
+                    Toast.LENGTH_LONG
+            ).show();
+
+            finish();
+            return;
+        }
+
+        requestQueue = Volley.newRequestQueue(
+                getApplicationContext()
+        );
+
+        calendar = Calendar.getInstance();
+
+        setCurrentDate();
+        setupInitialSpinners();
+        setupListeners();
+
+        showEmptyMessage(
+                "Select class and section to load students"
+        );
+
+        loadAttendanceClasses();
+    }
+
+    // ---------------------------------------------------------
+    // 1. INITIALIZE VIEWS
+    // ---------------------------------------------------------
+
+    private void initializeViews() {
+
         spinnerClass = findViewById(R.id.spinnerClass);
         spinnerSection = findViewById(R.id.spinnerSection);
+        spinnerTime = findViewById(R.id.spinnerTime);
+        spinnerSubject = findViewById(R.id.spinnerSubject);
 
         btnSelectDate = findViewById(R.id.btnSelectDate);
         btnSaveAttendance = findViewById(R.id.btnSaveAttendance);
@@ -94,155 +204,310 @@ public class AttendanceActivity extends AppCompatActivity {
         tvPresentCount = findViewById(R.id.tvPresentCount);
         tvAbsentCount = findViewById(R.id.tvAbsentCount);
 
+        tvAssignedTeacher = findViewById(R.id.tvAssignedTeacher);
+
         llAttendanceList = findViewById(R.id.llAttendanceList);
+    }
 
-        requestQueue = Volley.newRequestQueue(this);
-        calendar = Calendar.getInstance();
+    private void setupInitialSpinners() {
 
-        setCurrentDate();
-        setupClassSpinner();
-        setupSectionSpinner();
+        setSpinner(
+                spinnerClass,
+                new String[]{"Loading classes..."}
+        );
 
-        btnSelectDate.setOnClickListener(v -> showDatePicker());
+        setSpinner(
+                spinnerSection,
+                new String[]{"Select Section"}
+        );
 
-        btnSaveAttendance.setOnClickListener(v -> {
-            if (studentList.isEmpty()) {
-                Toast.makeText(
-                        AttendanceActivity.this,
-                        "Please select class and section first",
-                        Toast.LENGTH_SHORT
-                ).show();
+        setSpinner(
+                spinnerTime,
+                new String[]{"Select Time"}
+        );
+
+        setSpinner(
+                spinnerSubject,
+                new String[]{"Select Subject"}
+        );
+
+        tvAssignedTeacher.setText("Teacher: Not selected");
+        tvPresentCount.setText("Present: 0");
+        tvAbsentCount.setText("Absent: 0");
+
+        tvStudentCount.setText("Students: 0");
+    }
+
+    // ---------------------------------------------------------
+    // 2. SPINNER LISTENERS
+    // ---------------------------------------------------------
+
+    private void setupListeners() {
+
+        /*
+         * Class selection.
+         * Changing the class resets the selected section.
+         */
+
+        spinnerClass.setOnItemSelectedListener(
+                new AdapterView.OnItemSelectedListener() {
+
+                    @Override
+                    public void onItemSelected(
+                            AdapterView<?> parent,
+                            View view,
+                            int position,
+                            long id
+                    ) {
+
+                        if (suppressClassCallback) {
+                            return;
+                        }
+
+                        if (position <= 0 ||
+                                position >= classList.size()) {
+
+                            selectedClass = "";
+                            selectedSection = "";
+
+                            resetSectionSpinner();
+                            resetRoutineSelection();
+                            clearStudents();
+
+                            return;
+                        }
+
+                        String newClass = classList.get(position);
+
+                        if (newClass.equals(selectedClass)) {
+                            return;
+                        }
+
+                        selectedClass = newClass;
+                        selectedSection = "";
+
+                        resetSectionSpinner();
+                        resetRoutineSelection();
+                        clearStudents();
+
+                        populateSectionsForClass(selectedClass);
+                    }
+
+                    @Override
+                    public void onNothingSelected(
+                            AdapterView<?> parent
+                    ) {
+                    }
+                }
+        );
+
+        /*
+         * Section selection.
+         * Routine loading starts only after a valid section
+         * has been selected.
+         */
+
+        spinnerSection.setOnItemSelectedListener(
+                new AdapterView.OnItemSelectedListener() {
+
+                    @Override
+                    public void onItemSelected(
+                            AdapterView<?> parent,
+                            View view,
+                            int position,
+                            long id
+                    ) {
+
+                        if (suppressSectionCallback) {
+                            return;
+                        }
+
+                        if (position <= 0 ||
+                                position >= sectionList.size()) {
+
+                            selectedSection = "";
+
+                            resetRoutineSelection();
+                            clearStudents();
+
+                            return;
+                        }
+
+                        String newSection = sectionList.get(position);
+
+                        if (newSection.equals(selectedSection)) {
+                            return;
+                        }
+
+                        selectedSection = newSection;
+
+                        resetRoutineSelection();
+                        clearStudents();
+
+                        if (!selectedClass.isEmpty()
+                                && !selectedSection.isEmpty()) {
+
+                            loadRoutines();
+                        }
+                    }
+
+                    @Override
+                    public void onNothingSelected(
+                            AdapterView<?> parent
+                    ) {
+                    }
+                }
+        );
+
+        /*
+         * Time selection.
+         */
+
+        spinnerTime.setOnItemSelectedListener(
+                new AdapterView.OnItemSelectedListener() {
+
+                    @Override
+                    public void onItemSelected(
+                            AdapterView<?> parent,
+                            View view,
+                            int position,
+                            long id
+                    ) {
+
+                        if (suppressRoutineCallback) {
+                            return;
+                        }
+
+                        if (position <= 0 ||
+                                position > routineList.size()) {
+
+                            selectedRoutineId = "";
+
+                            updateSubjectAndTeacher(null);
+                            clearStudents();
+
+                            return;
+                        }
+
+                        JSONObject routine =
+                                routineList.get(position - 1);
+
+                        selectedRoutineId =
+                                routine.optString("routine_id", "");
+
+                        updateSubjectAndTeacher(routine);
+
+                        if (!selectedRoutineId.isEmpty()) {
+                            loadStudentsByClassAndSection();
+                        } else {
+                            clearStudents();
+                        }
+                    }
+
+                    @Override
+                    public void onNothingSelected(
+                            AdapterView<?> parent
+                    ) {
+                    }
+                }
+        );
+
+        btnSelectDate.setOnClickListener(
+                view -> showDatePicker()
+        );
+
+        btnSaveAttendance.setOnClickListener(view -> {
+
+            if (isSaving) {
+                return;
+            }
+
+            if (selectedClass.isEmpty()
+                    || selectedSection.isEmpty()) {
+
+                showToast("Please select class and section");
+                return;
+            }
+
+            if (selectedRoutineId.isEmpty()) {
+                showToast("Please select a scheduled time");
                 return;
             }
 
             if (selectedDate.isEmpty()) {
-                Toast.makeText(
-                        AttendanceActivity.this,
-                        "Please select attendance date",
-                        Toast.LENGTH_SHORT
-                ).show();
+                showToast("Please select attendance date");
                 return;
             }
 
-            if (getAuthToken().trim().isEmpty()) {
-                Toast.makeText(
-                        AttendanceActivity.this,
-                        "Session expired. Please login again.",
-                        Toast.LENGTH_LONG
-                ).show();
+            if (studentList.isEmpty()) {
+                showToast("No students available to save");
                 return;
             }
 
             saveAllAttendance();
         });
-
-        tvPresentCount.setText("Present: 0");
-        tvAbsentCount.setText("Absent: 0");
-
-        showEmptyMessage("Please select class and section");
     }
 
     // ---------------------------------------------------------
-    // Authentication
+    // 3. SPINNER ADAPTER HELPERS
     // ---------------------------------------------------------
 
-    private String getAuthToken() {
-        SharedPreferences preferences = getSharedPreferences(
-                "StudentAttendanceAuth",
-                MODE_PRIVATE
+    private void setSpinner(
+            Spinner spinner,
+            String[] values
+    ) {
+
+        ArrayAdapter<String> adapter =
+                new ArrayAdapter<>(
+                        this,
+                        android.R.layout.simple_spinner_item,
+                        values
+                );
+
+        adapter.setDropDownViewResource(
+                android.R.layout.simple_spinner_dropdown_item
         );
 
-        return preferences.getString("auth_token", "");
+        spinner.setAdapter(adapter);
     }
 
-    private Map<String, String> getAuthHeaders() {
+    private void setSpinner(
+            Spinner spinner,
+            ArrayList<String> values
+    ) {
+
+        ArrayAdapter<String> adapter =
+                new ArrayAdapter<>(
+                        this,
+                        android.R.layout.simple_spinner_item,
+                        values
+                );
+
+        adapter.setDropDownViewResource(
+                android.R.layout.simple_spinner_dropdown_item
+        );
+
+        spinner.setAdapter(adapter);
+    }
+
+    private Map<String, String> authHeaders() {
+
         Map<String, String> headers = new HashMap<>();
 
-        String token = getAuthToken();
-
-        if (token != null && !token.trim().isEmpty()) {
-            headers.put(
-                    "Authorization",
-                    "Bearer " + token.trim()
-            );
-        }
-
+        headers.put("Authorization", "Bearer " + authToken);
         headers.put("Accept", "application/json");
 
         return headers;
     }
 
-    private String getVolleyErrorMessage(
-            com.android.volley.VolleyError error
-    ) {
-        if (error == null) {
-            return "Unknown network error";
-        }
-
-        NetworkResponse response = error.networkResponse;
-
-        if (response != null) {
-            int statusCode = response.statusCode;
-            String responseBody = "";
-
-            try {
-                if (response.data != null) {
-                    responseBody = new String(
-                            response.data,
-                            java.nio.charset.StandardCharsets.UTF_8
-                    );
-                }
-
-                JSONObject json = new JSONObject(responseBody);
-                String serverMessage = json.optString(
-                        "message",
-                        ""
-                );
-
-                if (!serverMessage.isEmpty()) {
-                    return "HTTP " + statusCode + ": " + serverMessage;
-                }
-            } catch (Exception ignored) {
-                // The server response may not be JSON.
-            }
-
-            return "HTTP " + statusCode + ". Please check the API.";
-        }
-
-        if (error instanceof com.android.volley.TimeoutError) {
-            return "Request timed out. Check XAMPP and network.";
-        }
-
-        if (error instanceof com.android.volley.NoConnectionError) {
-            return "Cannot connect to server. Check XAMPP and URL.";
-        }
-
-        return "Network error: " + error.getMessage();
-    }
-
-    private void showNetworkError(
-            String action,
-            com.android.volley.VolleyError error
-    ) {
-        String details = getVolleyErrorMessage(error);
-
-        Toast.makeText(
-                AttendanceActivity.this,
-                action + ": " + details,
-                Toast.LENGTH_LONG
-        ).show();
-    }
-
     // ---------------------------------------------------------
-    // Date
+    // 4. DATE HANDLING
     // ---------------------------------------------------------
 
     private void setCurrentDate() {
+
         SimpleDateFormat databaseFormat =
-                new SimpleDateFormat(
-                        "yyyy-MM-dd",
-                        Locale.getDefault()
-                );
+                new SimpleDateFormat("yyyy-MM-dd", Locale.US);
 
         SimpleDateFormat displayFormat =
                 new SimpleDateFormat(
@@ -250,7 +515,8 @@ public class AttendanceActivity extends AppCompatActivity {
                         Locale.getDefault()
                 );
 
-        selectedDate = databaseFormat.format(calendar.getTime());
+        selectedDate =
+                databaseFormat.format(calendar.getTime());
 
         tvSelectedDate.setText(
                 displayFormat.format(calendar.getTime())
@@ -258,371 +524,665 @@ public class AttendanceActivity extends AppCompatActivity {
     }
 
     private void showDatePicker() {
-        int year = calendar.get(Calendar.YEAR);
-        int month = calendar.get(Calendar.MONTH);
-        int day = calendar.get(Calendar.DAY_OF_MONTH);
 
-        DatePickerDialog datePickerDialog =
-                new DatePickerDialog(
-                        this,
-                        (view, selectedYear, selectedMonth, selectedDay) -> {
-                            calendar.set(
-                                    selectedYear,
-                                    selectedMonth,
-                                    selectedDay
+        DatePickerDialog dialog = new DatePickerDialog(
+                this,
+                (picker, year, month, day) -> {
+
+                    calendar.set(
+                            year,
+                            month,
+                            day,
+                            0,
+                            0,
+                            0
+                    );
+
+                    SimpleDateFormat databaseFormat =
+                            new SimpleDateFormat(
+                                    "yyyy-MM-dd",
+                                    Locale.US
                             );
 
-                            SimpleDateFormat databaseFormat =
-                                    new SimpleDateFormat(
-                                            "yyyy-MM-dd",
-                                            Locale.getDefault()
-                                    );
-
-                            SimpleDateFormat displayFormat =
-                                    new SimpleDateFormat(
-                                            "dd MMMM yyyy",
-                                            Locale.getDefault()
-                                    );
-
-                            selectedDate = databaseFormat.format(
-                                    calendar.getTime()
+                    SimpleDateFormat displayFormat =
+                            new SimpleDateFormat(
+                                    "dd MMMM yyyy",
+                                    Locale.getDefault()
                             );
 
-                            tvSelectedDate.setText(
-                                    displayFormat.format(
-                                            calendar.getTime()
+                    selectedDate =
+                            databaseFormat.format(calendar.getTime());
+
+                    tvSelectedDate.setText(
+                            displayFormat.format(calendar.getTime())
+                    );
+
+                    clearStudents();
+
+                    if (!selectedClass.isEmpty()
+                            && !selectedSection.isEmpty()) {
+
+                        loadRoutines();
+                    }
+                },
+                calendar.get(Calendar.YEAR),
+                calendar.get(Calendar.MONTH),
+                calendar.get(Calendar.DAY_OF_MONTH)
+        );
+
+        dialog.show();
+    }
+
+    /*
+     * MySQL routine convention:
+     * Monday = 1, Tuesday = 2, ..., Sunday = 7.
+     */
+
+    private int getDayOfWeek() {
+
+        int day = calendar.get(Calendar.DAY_OF_WEEK);
+
+        if (day == Calendar.SUNDAY) {
+            return 7;
+        }
+
+        return day - 1;
+    }
+
+    // ---------------------------------------------------------
+    // 5. LOAD CLASSES AND SECTIONS FROM PHP API
+    // ---------------------------------------------------------
+
+    private void loadAttendanceClasses() {
+
+        setSpinner(
+                spinnerClass,
+                new String[]{"Loading classes..."}
+        );
+
+        StringRequest request = new StringRequest(
+                Request.Method.POST,
+                GET_CLASSES_URL,
+
+                response -> {
+
+                    try {
+
+                        JSONObject json = new JSONObject(response);
+
+                        if (!json.optBoolean("success", false)) {
+
+                            showToast(
+                                    json.optString(
+                                            "message",
+                                            "Unable to load classes"
                                     )
                             );
 
-                            if (!selectedClass.isEmpty()
-                                    && !selectedSection.isEmpty()) {
-                                loadStudentsByClassAndSection();
-                            }
-                        },
-                        year,
-                        month,
-                        day
-                );
-
-        datePickerDialog.show();
-    }
-
-    // ---------------------------------------------------------
-    // Class Spinner
-    // ---------------------------------------------------------
-
-    private void setupClassSpinner() {
-        ArrayList<String> classList = new ArrayList<>();
-
-        classList.add("Select Class");
-        classList.add("Class 6");
-        classList.add("Class 7");
-        classList.add("Class 8");
-        classList.add("Class 9");
-        classList.add("Class 10");
-        classList.add("Class 11");
-        classList.add("Class 12");
-
-        ArrayAdapter<String> adapter = new ArrayAdapter<>(
-                this,
-                android.R.layout.simple_spinner_item,
-                classList
-        );
-
-        adapter.setDropDownViewResource(
-                android.R.layout.simple_spinner_dropdown_item
-        );
-
-        spinnerClass.setAdapter(adapter);
-
-        spinnerClass.setOnItemSelectedListener(
-                new AdapterView.OnItemSelectedListener() {
-                    @Override
-                    public void onItemSelected(
-                            AdapterView<?> parent,
-                            View view,
-                            int position,
-                            long id
-                    ) {
-                        if (position == 0) {
-                            selectedClass = "";
-                            selectedSection = "";
-
-                            studentList.clear();
-                            attendanceStatus.clear();
-
-                            llAttendanceList.removeAllViews();
-
-                            showEmptyMessage(
-                                    "Please select class and section"
-                            );
-
-                            tvStudentCount.setText("Students: 0");
-
-                            tvAttendanceHint.setText(
-                                    "Select class and section to load students"
-                            );
-
-                            updateAttendanceCount();
+                            resetClassAndSectionSpinners();
                             return;
                         }
 
-                        selectedClass = parent.getItemAtPosition(
-                                position
-                        ).toString();
+                        JSONArray classes =
+                                json.optJSONArray("classes");
 
-                        spinnerSection.setSelection(0);
+                        classList.clear();
+                        sectionList.clear();
+                        classSectionData.clear();
+
+                        classList.add("Select Class");
+
+                        sectionList.add("Select Section");
+
+                        Set<String> uniqueClasses = new HashSet<>();
+
+                        if (classes != null) {
+
+                            for (int i = 0;
+                                 i < classes.length();
+                                 i++) {
+
+                                JSONObject item =
+                                        classes.getJSONObject(i);
+
+                                String className =
+                                        item.optString(
+                                                "class_name",
+                                                ""
+                                        ).trim();
+
+                                String section =
+                                        item.optString(
+                                                "section",
+                                                ""
+                                        ).trim();
+
+                                if (className.isEmpty()
+                                        || section.isEmpty()) {
+
+                                    continue;
+                                }
+
+                                classSectionData.add(item);
+
+                                if (uniqueClasses.add(className)) {
+                                    classList.add(className);
+                                }
+                            }
+                        }
+
+                        setSpinner(spinnerClass, classList);
+                        resetSectionSpinner();
+
+                        selectedClass = "";
                         selectedSection = "";
 
-                        studentList.clear();
-                        attendanceStatus.clear();
+                        resetRoutineSelection();
+                        clearStudents();
 
-                        llAttendanceList.removeAllViews();
+                        if (classList.size() <= 1) {
 
-                        showEmptyMessage("Please select section");
+                            showEmptyMessage(
+                                    "No assigned classes or sections found"
+                            );
+                        }
 
-                        tvStudentCount.setText("Students: 0");
+                    } catch (JSONException e) {
 
-                        tvAttendanceHint.setText(
-                                "Select section to load students"
+                        Log.e(
+                                "AttendanceActivity",
+                                "Class JSON parsing failed",
+                                e
                         );
 
-                        updateAttendanceCount();
+                        showToast("Invalid class API response");
+                        resetClassAndSectionSpinners();
                     }
+                },
 
-                    @Override
-                    public void onNothingSelected(
-                            AdapterView<?> parent
-                    ) {
-                    }
+                error -> {
+
+                    showVolleyError(
+                            "Loading classes failed",
+                            error
+                    );
+
+                    resetClassAndSectionSpinners();
                 }
-        );
+        ) {
+
+            @Override
+            public Map<String, String> getHeaders() {
+                return authHeaders();
+            }
+
+            @Override
+            protected Map<String, String> getParams() {
+                return new HashMap<>();
+            }
+        };
+
+        requestQueue.add(request);
     }
 
-    // ---------------------------------------------------------
-    // Section Spinner
-    // ---------------------------------------------------------
+    /*
+     * Filters section options using the selected class.
+     *
+     * Example API records:
+     * MCA - A
+     * MCA - B
+     * BCA - A
+     *
+     * Selecting MCA displays only A and B.
+     */
 
-    private void setupSectionSpinner() {
-        ArrayList<String> sectionList = new ArrayList<>();
+    private void populateSectionsForClass(String className) {
 
+        sectionList.clear();
         sectionList.add("Select Section");
-        sectionList.add("Section A");
-        sectionList.add("Section B");
-        sectionList.add("Section C");
-        sectionList.add("Section D");
 
-        ArrayAdapter<String> adapter = new ArrayAdapter<>(
-                this,
-                android.R.layout.simple_spinner_item,
-                sectionList
-        );
+        Set<String> uniqueSections = new HashSet<>();
 
-        adapter.setDropDownViewResource(
-                android.R.layout.simple_spinner_dropdown_item
-        );
+        for (JSONObject item : classSectionData) {
 
-        spinnerSection.setAdapter(adapter);
+            String apiClass =
+                    item.optString("class_name", "").trim();
 
-        spinnerSection.setOnItemSelectedListener(
-                new AdapterView.OnItemSelectedListener() {
-                    @Override
-                    public void onItemSelected(
-                            AdapterView<?> parent,
-                            View view,
-                            int position,
-                            long id
-                    ) {
-                        if (position == 0) {
-                            selectedSection = "";
+            String apiSection =
+                    item.optString("section", "").trim();
 
-                            studentList.clear();
-                            attendanceStatus.clear();
+            if (className.equals(apiClass)
+                    && !apiSection.isEmpty()
+                    && uniqueSections.add(apiSection)) {
 
-                            llAttendanceList.removeAllViews();
+                sectionList.add(apiSection);
+            }
+        }
 
-                            showEmptyMessage("Please select section");
+        suppressSectionCallback = true;
 
-                            tvStudentCount.setText("Students: 0");
+        setSpinner(spinnerSection, sectionList);
+        spinnerSection.setSelection(0);
 
-                            tvAttendanceHint.setText(
-                                    "Select class and section to load students"
-                            );
+        suppressSectionCallback = false;
 
-                            updateAttendanceCount();
-                            return;
-                        }
+        selectedSection = "";
 
-                        selectedSection = parent.getItemAtPosition(
-                                position
-                        ).toString();
+        if (sectionList.size() <= 1) {
 
-                        if (!selectedClass.isEmpty()) {
-                            loadStudentsByClassAndSection();
-                        }
-                    }
+            showEmptyMessage(
+                    "No sections found for " + className
+            );
+        }
+    }
 
-                    @Override
-                    public void onNothingSelected(
-                            AdapterView<?> parent
-                    ) {
-                    }
-                }
-        );
+    private void resetSectionSpinner() {
+
+        sectionList.clear();
+        sectionList.add("Select Section");
+
+        suppressSectionCallback = true;
+
+        setSpinner(spinnerSection, sectionList);
+        spinnerSection.setSelection(0);
+
+        suppressSectionCallback = false;
+    }
+
+    private void resetClassAndSectionSpinners() {
+
+        classList.clear();
+        classList.add("Select Class");
+
+        classSectionData.clear();
+
+        setSpinner(spinnerClass, classList);
+
+        resetSectionSpinner();
+
+        selectedClass = "";
+        selectedSection = "";
+
+        resetRoutineSelection();
+        clearStudents();
     }
 
     // ---------------------------------------------------------
-    // Load Students
+    // 6. LOAD ROUTINES FOR SELECTED CLASS, SECTION AND DATE
     // ---------------------------------------------------------
 
-    private void loadStudentsByClassAndSection() {
+    private void loadRoutines() {
+
         if (selectedClass.isEmpty()
                 || selectedSection.isEmpty()) {
             return;
         }
 
-        if (getAuthToken().trim().isEmpty()) {
-            showEmptyMessage("Session expired. Please login again.");
-            tvStudentCount.setText("Students: 0");
+        resetRoutineSelection();
+
+        StringRequest request = new StringRequest(
+                Request.Method.POST,
+                GET_ROUTINES_URL,
+
+                response -> {
+
+                    try {
+
+                        JSONObject json = new JSONObject(response);
+
+                        if (!json.optBoolean("success", false)) {
+
+                            showToast(
+                                    json.optString(
+                                            "message",
+                                            "Unable to load routine"
+                                    )
+                            );
+
+                            return;
+                        }
+
+                        JSONArray routines =
+                                json.optJSONArray("routines");
+
+                        routineList.clear();
+
+                        timeList.clear();
+                        subjectList.clear();
+
+                        timeList.add("Select Time");
+                        subjectList.add("Select Subject");
+
+                        if (routines != null) {
+
+                            for (int i = 0;
+                                 i < routines.length();
+                                 i++) {
+
+                                JSONObject routine =
+                                        routines.getJSONObject(i);
+
+                                routineList.add(routine);
+
+                                String start = formatTime(
+                                        routine.optString(
+                                                "start_time",
+                                                ""
+                                        )
+                                );
+
+                                String end = formatTime(
+                                        routine.optString(
+                                                "end_time",
+                                                ""
+                                        )
+                                );
+
+                                timeList.add(start + " - " + end);
+
+                                subjectList.add(
+                                        routine.optString(
+                                                "subject_name",
+                                                "Unknown Subject"
+                                        )
+                                );
+                            }
+                        }
+
+                        setSpinner(spinnerTime, timeList);
+                        setSpinner(spinnerSubject, subjectList);
+
+                        if (routineList.isEmpty()) {
+
+                            showEmptyMessage(
+                                    "No routine found for this date"
+                            );
+
+                            tvAssignedTeacher.setText(
+                                    "Teacher: Not assigned"
+                            );
+                        }
+
+                    } catch (JSONException e) {
+
+                        Log.e(
+                                "AttendanceActivity",
+                                "Routine JSON parsing failed",
+                                e
+                        );
+
+                        showToast("Invalid routine API response");
+                    }
+                },
+
+                error -> showVolleyError(
+                        "Loading routine failed",
+                        error
+                )
+        ) {
+
+            @Override
+            public Map<String, String> getHeaders() {
+                return authHeaders();
+            }
+
+            @Override
+            protected Map<String, String> getParams() {
+
+                Map<String, String> params = new HashMap<>();
+
+                params.put("class_name", selectedClass);
+                params.put("section", selectedSection);
+
+                params.put(
+                        "day_of_week",
+                        String.valueOf(getDayOfWeek())
+                );
+
+                return params;
+            }
+        };
+
+        requestQueue.add(request);
+    }
+
+    // ---------------------------------------------------------
+    // 7. SUBJECT AND TEACHER INFORMATION
+    // ---------------------------------------------------------
+
+    private void updateSubjectAndTeacher(JSONObject routine) {
+
+        if (routine == null) {
+
+            suppressRoutineCallback = true;
+            spinnerSubject.setSelection(0);
+            suppressRoutineCallback = false;
+
+            tvAssignedTeacher.setText("Teacher: Not selected");
+
+            return;
+        }
+
+        String teacherName =
+                routine.optString(
+                        "teacher_name",
+                        "Not assigned"
+                );
+
+        int routinePosition = routineList.indexOf(routine);
+
+        if (routinePosition >= 0) {
+
+            suppressRoutineCallback = true;
+
+            spinnerSubject.setSelection(routinePosition + 1);
+
+            suppressRoutineCallback = false;
+        }
+
+        tvAssignedTeacher.setText(
+                "Teacher: " + teacherName
+        );
+    }
+
+    private String formatTime(String time) {
+
+        if (time == null || time.trim().isEmpty()) {
+            return "--:--";
+        }
+
+        return time.length() >= 5
+                ? time.substring(0, 5)
+                : time;
+    }
+
+    private void resetRoutineSelection() {
+
+        selectedRoutineId = "";
+
+        routineList.clear();
+
+        timeList.clear();
+        timeList.add("Select Time");
+
+        subjectList.clear();
+        subjectList.add("Select Subject");
+
+        suppressRoutineCallback = true;
+
+        setSpinner(spinnerTime, timeList);
+        setSpinner(spinnerSubject, subjectList);
+
+        suppressRoutineCallback = false;
+
+        tvAssignedTeacher.setText("Teacher: Not selected");
+    }
+
+    // ---------------------------------------------------------
+    // 8. CLEAR STUDENT LIST
+    // ---------------------------------------------------------
+
+    private void clearStudents() {
+
+        studentList.clear();
+        attendanceStatus.clear();
+
+        tvStudentCount.setText("Students: 0");
+
+        tvAttendanceHint.setText(
+                "Select a scheduled time"
+        );
+
+        updateAttendanceCount();
+
+        showEmptyMessage(
+                "Select a scheduled time to load students"
+        );
+    }
+
+    // ---------------------------------------------------------
+    // 9. LOAD STUDENTS FOR CLASS AND SECTION
+    // ---------------------------------------------------------
+
+    private void loadStudentsByClassAndSection() {
+
+        if (selectedClass.isEmpty()
+                || selectedSection.isEmpty()
+                || selectedRoutineId.isEmpty()) {
             return;
         }
 
         studentList.clear();
         attendanceStatus.clear();
-        llAttendanceList.removeAllViews();
+
+        showEmptyMessage("Loading students...");
 
         tvStudentCount.setText("Loading students...");
-        tvAttendanceHint.setText("Please wait...");
 
         StringRequest request = new StringRequest(
                 Request.Method.POST,
-                GET_STUDENTS_BY_CLASS_SECTION_URL,
+                GET_STUDENTS_URL,
+
                 response -> {
+
                     try {
-                        JSONObject jsonObject = new JSONObject(response);
 
-                        boolean success = jsonObject.optBoolean(
-                                "success",
-                                false
-                        );
+                        JSONObject json = new JSONObject(response);
 
-                        if (!success) {
-                            String message = jsonObject.optString(
-                                    "message",
-                                    "No students found"
+                        if (!json.optBoolean("success", false)) {
+
+                            showEmptyMessage(
+                                    json.optString(
+                                            "message",
+                                            "Unable to load students"
+                                    )
                             );
 
-                            showEmptyMessage(message);
                             tvStudentCount.setText("Students: 0");
-                            tvAttendanceHint.setText(
-                                    "No students available"
-                            );
 
-                            updateAttendanceCount();
                             return;
                         }
 
-                        JSONArray studentsArray =
-                                jsonObject.optJSONArray("students");
+                        JSONArray students =
+                                json.optJSONArray("students");
 
-                        if (studentsArray == null
-                                || studentsArray.length() == 0) {
+                        if (students == null
+                                || students.length() == 0) {
+
                             showEmptyMessage(
                                     "No students found for this class and section"
                             );
 
                             tvStudentCount.setText("Students: 0");
-                            tvAttendanceHint.setText(
-                                    "No students available"
-                            );
 
                             updateAttendanceCount();
+
                             return;
                         }
 
                         for (int i = 0;
-                             i < studentsArray.length();
+                             i < students.length();
                              i++) {
 
-                            JSONObject studentObject =
-                                    studentsArray.getJSONObject(i);
+                            JSONObject item =
+                                    students.getJSONObject(i);
 
                             HashMap<String, String> student =
                                     new HashMap<>();
 
-                            String studentId =
-                                    studentObject.optString("id");
+                            String id = item.optString("id", "");
 
-                            student.put("id", studentId);
+                            if (id.isEmpty()) {
+                                continue;
+                            }
+
+                            student.put("id", id);
+
                             student.put(
                                     "name",
-                                    studentObject.optString("name")
+                                    item.optString("name", "")
                             );
+
                             student.put(
                                     "roll_number",
-                                    studentObject.optString("roll_number")
+                                    item.optString("roll_number", "")
                             );
+
                             student.put(
                                     "class_name",
-                                    studentObject.optString("class_name")
+                                    item.optString("class_name", "")
                             );
+
                             student.put(
                                     "section",
-                                    studentObject.optString("section")
-                            );
-                            student.put(
-                                    "email",
-                                    studentObject.optString("email")
-                            );
-                            student.put(
-                                    "phone",
-                                    studentObject.optString("phone")
-                            );
-                            student.put(
-                                    "photo",
-                                    studentObject.optString("photo")
+                                    item.optString("section", "")
                             );
 
                             studentList.add(student);
 
-                            // Default status is Absent.
-                            attendanceStatus.put(
-                                    studentId,
-                                    "Absent"
-                            );
+                            // New attendance defaults to Absent.
+                            attendanceStatus.put(id, "Absent");
+                        }
+
+                        if (studentList.isEmpty()) {
+
+                            showEmptyMessage("No valid student records found");
+
+                            tvStudentCount.setText("Students: 0");
+
+                            updateAttendanceCount();
+
+                            return;
                         }
 
                         loadSavedAttendance();
 
                     } catch (JSONException e) {
-                        showEmptyMessage("Invalid server response");
-                        tvStudentCount.setText("Students: 0");
 
-                        Toast.makeText(
-                                AttendanceActivity.this,
-                                "JSON error: " + e.getMessage(),
-                                Toast.LENGTH_LONG
-                        ).show();
+                        Log.e(
+                                "AttendanceActivity",
+                                "Student JSON parsing failed",
+                                e
+                        );
+
+                        showEmptyMessage("Invalid student API response");
                     }
                 },
-                error -> {
-                    showEmptyMessage("Failed to load students");
 
-                    tvStudentCount.setText("Students: 0");
-                    tvAttendanceHint.setText(
-                            "Please check API authentication"
-                    );
-
-                    showNetworkError("Load students failed", error);
-                }
+                error -> showVolleyError(
+                        "Loading students failed",
+                        error
+                )
         ) {
+
             @Override
             public Map<String, String> getHeaders() {
-                return getAuthHeaders();
+                return authHeaders();
             }
 
             @Override
             protected Map<String, String> getParams() {
+
                 Map<String, String> params = new HashMap<>();
 
                 params.put("class_name", selectedClass);
@@ -636,72 +1196,51 @@ public class AttendanceActivity extends AppCompatActivity {
     }
 
     // ---------------------------------------------------------
-    // Load Saved Attendance
+    // 10. LOAD PREVIOUSLY SAVED ATTENDANCE
     // ---------------------------------------------------------
 
     private void loadSavedAttendance() {
-        if (selectedClass.isEmpty()
-                || selectedSection.isEmpty()
-                || selectedDate.isEmpty()) {
-            displayStudents();
-            return;
-        }
 
         StringRequest request = new StringRequest(
                 Request.Method.POST,
                 GET_ATTENDANCE_URL,
+
                 response -> {
+
                     try {
-                        JSONObject jsonObject = new JSONObject(response);
 
-                        boolean success = jsonObject.optBoolean(
-                                "success",
-                                false
-                        );
+                        JSONObject json = new JSONObject(response);
 
-                        if (!success) {
-                            displayStudents();
-                            return;
-                        }
+                        JSONArray records =
+                                json.optJSONArray("attendance");
 
-                        JSONArray attendanceArray =
-                                jsonObject.optJSONArray("attendance");
+                        if (json.optBoolean("success", false)
+                                && records != null) {
 
-                        for (HashMap<String, String> student : studentList) {
-                            attendanceStatus.put(
-                                    student.get("id"),
-                                    "Absent"
-                            );
-                        }
-
-                        if (attendanceArray != null) {
                             for (int i = 0;
-                                 i < attendanceArray.length();
+                                 i < records.length();
                                  i++) {
 
-                                JSONObject attendanceObject =
-                                        attendanceArray.getJSONObject(i);
+                                JSONObject record =
+                                        records.getJSONObject(i);
 
                                 String studentId =
-                                        attendanceObject.optString(
-                                                "student_id"
-                                        );
+                                        record.optString("student_id");
 
                                 String status =
-                                        attendanceObject.optString("status");
-
-                                if (!studentId.isEmpty()) {
-                                    if ("Present".equals(status)) {
-                                        attendanceStatus.put(
-                                                studentId,
-                                                "Present"
-                                        );
-                                    } else {
-                                        attendanceStatus.put(
-                                                studentId,
+                                        record.optString(
+                                                "status",
                                                 "Absent"
                                         );
-                                    }
+
+                                if (studentListContains(studentId)) {
+
+                                    attendanceStatus.put(
+                                            studentId,
+                                            "Present".equalsIgnoreCase(status)
+                                                    ? "Present"
+                                                    : "Absent"
+                                    );
                                 }
                             }
                         }
@@ -709,36 +1248,37 @@ public class AttendanceActivity extends AppCompatActivity {
                         displayStudents();
 
                     } catch (JSONException e) {
-                        displayStudents();
 
-                        Toast.makeText(
-                                AttendanceActivity.this,
-                                "Invalid attendance response",
-                                Toast.LENGTH_LONG
-                        ).show();
+                        displayStudents();
                     }
                 },
+
                 error -> {
-                    // Students can still be displayed with default Absent.
+
                     displayStudents();
-                    showNetworkError(
+
+                    Toast.makeText(
+                            this,
                             "Could not load saved attendance",
-                            error
-                    );
+                            Toast.LENGTH_SHORT
+                    ).show();
                 }
         ) {
+
             @Override
             public Map<String, String> getHeaders() {
-                return getAuthHeaders();
+                return authHeaders();
             }
 
             @Override
             protected Map<String, String> getParams() {
+
                 Map<String, String> params = new HashMap<>();
 
                 params.put("class_name", selectedClass);
                 params.put("section", selectedSection);
                 params.put("attendance_date", selectedDate);
+                params.put("routine_id", selectedRoutineId);
 
                 return params;
             }
@@ -747,20 +1287,34 @@ public class AttendanceActivity extends AppCompatActivity {
         requestQueue.add(request);
     }
 
+    private boolean studentListContains(String studentId) {
+
+        for (HashMap<String, String> student : studentList) {
+
+            if (studentId.equals(student.get("id"))) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
     // ---------------------------------------------------------
-    // Display Students
+    // 11. DISPLAY STUDENTS AND ATTENDANCE RADIO BUTTONS
     // ---------------------------------------------------------
 
     private void displayStudents() {
+
         llAttendanceList.removeAllViews();
 
         if (studentList.isEmpty()) {
+
             showEmptyMessage("No students found");
 
             tvStudentCount.setText("Students: 0");
-            tvAttendanceHint.setText("No students available");
 
             updateAttendanceCount();
+
             return;
         }
 
@@ -773,25 +1327,25 @@ public class AttendanceActivity extends AppCompatActivity {
         );
 
         for (HashMap<String, String> student : studentList) {
+
             String studentId = student.get("id");
-            String studentName = student.get("name");
-            String rollNumber = student.get("roll_number");
 
             LinearLayout card = new LinearLayout(this);
+
             card.setOrientation(LinearLayout.VERTICAL);
             card.setPadding(24, 20, 24, 20);
 
-            GradientDrawable cardBackground =
-                    new GradientDrawable();
+            GradientDrawable background = new GradientDrawable();
 
-            cardBackground.setColor(Color.WHITE);
-            cardBackground.setCornerRadius(24);
-            cardBackground.setStroke(
+            background.setColor(Color.WHITE);
+            background.setCornerRadius(24);
+
+            background.setStroke(
                     1,
                     Color.rgb(230, 233, 238)
             );
 
-            card.setBackground(cardBackground);
+            card.setBackground(background);
 
             LinearLayout.LayoutParams cardParams =
                     new LinearLayout.LayoutParams(
@@ -800,20 +1354,27 @@ public class AttendanceActivity extends AppCompatActivity {
                     );
 
             cardParams.setMargins(0, 0, 0, 18);
+
             card.setLayoutParams(cardParams);
 
-            TextView nameText = new TextView(this);
-            nameText.setText(studentName);
-            nameText.setTextSize(18);
-            nameText.setTextColor(Color.rgb(30, 35, 45));
-            nameText.setTypeface(null, Typeface.BOLD);
+            TextView name = new TextView(this);
 
-            card.addView(nameText);
+            name.setText(student.get("name"));
+            name.setTextSize(18);
+            name.setTextColor(Color.rgb(30, 35, 45));
 
-            TextView rollText = new TextView(this);
-            rollText.setText("Roll Number: " + rollNumber);
-            rollText.setTextSize(14);
-            rollText.setTextColor(Color.rgb(110, 115, 125));
+            name.setTypeface(null, Typeface.BOLD);
+
+            card.addView(name);
+
+            TextView roll = new TextView(this);
+
+            roll.setText(
+                    "Roll Number: " + student.get("roll_number")
+            );
+
+            roll.setTextSize(14);
+            roll.setTextColor(Color.rgb(110, 115, 125));
 
             LinearLayout.LayoutParams rollParams =
                     new LinearLayout.LayoutParams(
@@ -822,84 +1383,92 @@ public class AttendanceActivity extends AppCompatActivity {
                     );
 
             rollParams.setMargins(0, 5, 0, 15);
-            rollText.setLayoutParams(rollParams);
 
-            card.addView(rollText);
+            roll.setLayoutParams(rollParams);
 
-            TextView statusTitle = new TextView(this);
-            statusTitle.setText("Attendance Status");
-            statusTitle.setTextSize(14);
-            statusTitle.setTextColor(Color.rgb(80, 85, 95));
-            statusTitle.setTypeface(null, Typeface.BOLD);
+            card.addView(roll);
 
-            card.addView(statusTitle);
+            TextView title = new TextView(this);
 
-            RadioGroup radioGroup = new RadioGroup(this);
-            radioGroup.setOrientation(RadioGroup.HORIZONTAL);
-            radioGroup.setGravity(Gravity.CENTER_VERTICAL);
+            title.setText("Attendance Status");
+            title.setTextSize(14);
 
-            LinearLayout.LayoutParams radioGroupParams =
-                    new LinearLayout.LayoutParams(
-                            LinearLayout.LayoutParams.MATCH_PARENT,
-                            LinearLayout.LayoutParams.WRAP_CONTENT
-                    );
+            title.setTextColor(Color.rgb(80, 85, 95));
+            title.setTypeface(null, Typeface.BOLD);
 
-            radioGroupParams.setMargins(0, 10, 0, 0);
-            radioGroup.setLayoutParams(radioGroupParams);
+            card.addView(title);
+
+            RadioGroup group = new RadioGroup(this);
+
+            group.setOrientation(RadioGroup.HORIZONTAL);
+            group.setGravity(Gravity.CENTER_VERTICAL);
 
             RadioButton present = new RadioButton(this);
+
             present.setText("Present");
             present.setTextSize(14);
-            present.setTextColor(Color.rgb(50, 55, 60));
+
             present.setGravity(Gravity.CENTER);
             present.setPadding(12, 12, 12, 12);
+
             present.setButtonDrawable(null);
             present.setBackgroundResource(R.drawable.bg_present);
+
             present.setId(View.generateViewId());
+
+            RadioButton absent = new RadioButton(this);
+
+            absent.setText("Absent");
+            absent.setTextSize(14);
+
+            absent.setGravity(Gravity.CENTER);
+            absent.setPadding(12, 12, 12, 12);
+
+            absent.setButtonDrawable(null);
+            absent.setBackgroundResource(R.drawable.bg_absent);
+
+            absent.setId(View.generateViewId());
 
             LinearLayout.LayoutParams presentParams =
                     new LinearLayout.LayoutParams(0, 55, 1);
 
             presentParams.setMargins(0, 0, 8, 0);
-            present.setLayoutParams(presentParams);
 
-            RadioButton absent = new RadioButton(this);
-            absent.setText("Absent");
-            absent.setTextSize(14);
-            absent.setTextColor(Color.rgb(50, 55, 60));
-            absent.setGravity(Gravity.CENTER);
-            absent.setPadding(12, 12, 12, 12);
-            absent.setButtonDrawable(null);
-            absent.setBackgroundResource(R.drawable.bg_absent);
-            absent.setId(View.generateViewId());
+            present.setLayoutParams(presentParams);
 
             LinearLayout.LayoutParams absentParams =
                     new LinearLayout.LayoutParams(0, 55, 1);
 
             absentParams.setMargins(8, 0, 0, 0);
+
             absent.setLayoutParams(absentParams);
 
-            radioGroup.addView(present);
-            radioGroup.addView(absent);
+            group.addView(present);
+            group.addView(absent);
 
-            card.addView(radioGroup);
+            card.addView(group);
 
-            String currentStatus = attendanceStatus.get(studentId);
+            String currentStatus =
+                    attendanceStatus.get(studentId);
 
             if ("Present".equals(currentStatus)) {
-                radioGroup.check(present.getId());
+                group.check(present.getId());
             } else {
-                radioGroup.check(absent.getId());
+                group.check(absent.getId());
             }
 
-            radioGroup.setOnCheckedChangeListener(
-                    (group, checkedId) -> {
+            group.setOnCheckedChangeListener(
+                    (radioGroup, checkedId) -> {
+
                         if (checkedId == present.getId()) {
+
                             attendanceStatus.put(
                                     studentId,
                                     "Present"
                             );
+
                         } else if (checkedId == absent.getId()) {
+
                             attendanceStatus.put(
                                     studentId,
                                     "Absent"
@@ -917,16 +1486,20 @@ public class AttendanceActivity extends AppCompatActivity {
     }
 
     // ---------------------------------------------------------
-    // Empty Message
+    // 12. EMPTY STATE MESSAGE
     // ---------------------------------------------------------
 
     private void showEmptyMessage(String message) {
+
         llAttendanceList.removeAllViews();
 
         TextView emptyText = new TextView(this);
+
         emptyText.setText(message);
         emptyText.setTextSize(15);
+
         emptyText.setTextColor(Color.rgb(120, 125, 135));
+
         emptyText.setGravity(Gravity.CENTER);
         emptyText.setPadding(20, 60, 20, 60);
 
@@ -934,16 +1507,18 @@ public class AttendanceActivity extends AppCompatActivity {
     }
 
     // ---------------------------------------------------------
-    // Attendance Counters
+    // 13. UPDATE PRESENT AND ABSENT COUNTS
     // ---------------------------------------------------------
 
     private void updateAttendanceCount() {
+
         int presentCount = 0;
         int absentCount = 0;
 
         for (HashMap<String, String> student : studentList) {
-            String studentId = student.get("id");
-            String status = attendanceStatus.get(studentId);
+
+            String status =
+                    attendanceStatus.get(student.get("id"));
 
             if ("Present".equals(status)) {
                 presentCount++;
@@ -952,32 +1527,26 @@ public class AttendanceActivity extends AppCompatActivity {
             }
         }
 
-        tvPresentCount.setText("Present: " + presentCount);
-        tvAbsentCount.setText("Absent: " + absentCount);
+        tvPresentCount.setText(
+                "Present: " + presentCount
+        );
+
+        tvAbsentCount.setText(
+                "Absent: " + absentCount
+        );
     }
 
     // ---------------------------------------------------------
-    // Save All Attendance
+    // 14. SAVE ATTENDANCE
     // ---------------------------------------------------------
 
     private void saveAllAttendance() {
-        if (studentList.isEmpty()) {
-            Toast.makeText(
-                    this,
-                    "No students to save",
-                    Toast.LENGTH_SHORT
-            ).show();
+
+        if (isSaving || studentList.isEmpty()) {
             return;
         }
 
-        if (getAuthToken().trim().isEmpty()) {
-            Toast.makeText(
-                    this,
-                    "Session expired. Please login again.",
-                    Toast.LENGTH_LONG
-            ).show();
-            return;
-        }
+        isSaving = true;
 
         btnSaveAttendance.setEnabled(false);
         btnSaveAttendance.setText("Saving...");
@@ -985,28 +1554,31 @@ public class AttendanceActivity extends AppCompatActivity {
         saveAttendanceAtIndex(0);
     }
 
-    // ---------------------------------------------------------
-    // Save Attendance One By One
-    // ---------------------------------------------------------
-
     private void saveAttendanceAtIndex(int index) {
+
         if (index >= studentList.size()) {
+
+            isSaving = false;
+
             btnSaveAttendance.setEnabled(true);
             btnSaveAttendance.setText("Save Attendance");
 
             Toast.makeText(
-                    AttendanceActivity.this,
-                    "All attendance saved successfully",
-                    Toast.LENGTH_SHORT
+                    this,
+                    "Attendance saved successfully",
+                    Toast.LENGTH_LONG
             ).show();
 
             loadStudentsByClassAndSection();
+
             return;
         }
 
-        HashMap<String, String> student = studentList.get(index);
+        HashMap<String, String> student =
+                studentList.get(index);
 
         String studentId = student.get("id");
+
         String status = attendanceStatus.get(studentId);
 
         if (status == null || status.isEmpty()) {
@@ -1018,69 +1590,175 @@ public class AttendanceActivity extends AppCompatActivity {
         StringRequest request = new StringRequest(
                 Request.Method.POST,
                 MARK_ATTENDANCE_URL,
+
                 response -> {
+
                     try {
-                        JSONObject jsonObject = new JSONObject(response);
 
-                        boolean success = jsonObject.optBoolean(
-                                "success",
-                                false
-                        );
+                        JSONObject json = new JSONObject(response);
 
-                        if (success) {
+                        if (json.optBoolean("success", false)) {
+
                             saveAttendanceAtIndex(index + 1);
-                        } else {
-                            btnSaveAttendance.setEnabled(true);
-                            btnSaveAttendance.setText("Save Attendance");
 
-                            Toast.makeText(
-                                    AttendanceActivity.this,
-                                    jsonObject.optString(
+                        } else {
+
+                            finishSavingWithError(
+                                    json.optString(
                                             "message",
                                             "Failed to save attendance"
-                                    ),
-                                    Toast.LENGTH_LONG
-                            ).show();
+                                    )
+                            );
                         }
 
                     } catch (JSONException e) {
-                        btnSaveAttendance.setEnabled(true);
-                        btnSaveAttendance.setText("Save Attendance");
 
-                        Toast.makeText(
-                                AttendanceActivity.this,
-                                "Invalid server response",
-                                Toast.LENGTH_LONG
-                        ).show();
+                        finishSavingWithError(
+                                "Invalid server response"
+                        );
                     }
                 },
-                error -> {
-                    btnSaveAttendance.setEnabled(true);
-                    btnSaveAttendance.setText("Save Attendance");
 
-                    showNetworkError(
-                            "Failed to save attendance",
-                            error
-                    );
-                }
+                error -> finishSavingWithError(
+                        buildVolleyErrorMessage(
+                                "Attendance save failed",
+                                error
+                        )
+                )
         ) {
+
             @Override
             public Map<String, String> getHeaders() {
-                return getAuthHeaders();
+                return authHeaders();
             }
 
             @Override
             protected Map<String, String> getParams() {
+
                 Map<String, String> params = new HashMap<>();
 
                 params.put("student_id", studentId);
                 params.put("attendance_date", selectedDate);
                 params.put("status", finalStatus);
 
+                params.put("routine_id", selectedRoutineId);
+                params.put("class_name", selectedClass);
+                params.put("section", selectedSection);
+
                 return params;
             }
         };
 
         requestQueue.add(request);
+    }
+
+    private void finishSavingWithError(String message) {
+
+        isSaving = false;
+
+        btnSaveAttendance.setEnabled(true);
+        btnSaveAttendance.setText("Save Attendance");
+
+        showToast(message);
+    }
+
+    // ---------------------------------------------------------
+    // 15. VOLLEY ERROR HANDLING
+    // ---------------------------------------------------------
+
+    private String buildVolleyErrorMessage(
+            String operation,
+            VolleyError error
+    ) {
+
+        int statusCode = -1;
+        String responseBody = "";
+
+        if (error.networkResponse != null) {
+
+            statusCode = error.networkResponse.statusCode;
+
+            byte[] data = error.networkResponse.data;
+
+            if (data != null) {
+
+                responseBody = new String(
+                        data,
+                        StandardCharsets.UTF_8
+                );
+            }
+        }
+
+        String message = operation;
+
+        if (statusCode != -1) {
+            message += " (HTTP " + statusCode + ")";
+        }
+
+        if (!responseBody.trim().isEmpty()) {
+
+            try {
+
+                JSONObject json = new JSONObject(responseBody);
+
+                String serverMessage =
+                        json.optString("message", "");
+
+                message += ": " + (
+                        serverMessage.isEmpty()
+                                ? responseBody
+                                : serverMessage
+                );
+
+            } catch (JSONException e) {
+
+                message += ": " + responseBody;
+            }
+
+        } else if (error.getMessage() != null) {
+
+            message += ": " + error.getMessage();
+        }
+
+        Log.e(
+                "AttendanceActivity",
+                message,
+                error
+        );
+
+        return message;
+    }
+
+    private void showVolleyError(
+            String operation,
+            VolleyError error
+    ) {
+
+        showToast(
+                buildVolleyErrorMessage(operation, error)
+        );
+    }
+
+    private void showToast(String message) {
+
+        Toast.makeText(
+                this,
+                message,
+                Toast.LENGTH_LONG
+        ).show();
+    }
+
+    // ---------------------------------------------------------
+    // 16. ACTIVITY CLEANUP
+    // ---------------------------------------------------------
+
+    @Override
+    protected void onDestroy() {
+
+        if (requestQueue != null) {
+            requestQueue.cancelAll(request -> true);
+        }
+
+        super.onDestroy();
     }
 }

@@ -7,157 +7,175 @@ require_once "auth.php";
 
 mysqli_report(MYSQLI_REPORT_ERROR | MYSQLI_REPORT_STRICT);
 
-// ======================================================
-// Only POST Method
-// ======================================================
+function sendJsonResponse(int $status, array $data): void
+{
+    http_response_code($status);
 
-if ($_SERVER["REQUEST_METHOD"] !== "POST") {
-
-    http_response_code(405);
-
-    echo json_encode([
-        "success" => false,
-        "message" => "Only POST method is allowed"
-    ]);
+    echo json_encode(
+        $data,
+        JSON_UNESCAPED_UNICODE
+    );
 
     exit;
 }
 
 try {
 
-    // ======================================================
-    // Authenticate Admin or Teacher
-    // ======================================================
+    // 1. Allow POST requests only.
+    if ($_SERVER["REQUEST_METHOD"] !== "POST") {
+        header("Allow: POST");
 
+        sendJsonResponse(405, [
+            "success" => false,
+            "message" => "Only POST method is allowed"
+        ]);
+    }
+
+    // 2. Authenticate the user.
     $user = requireAuth();
 
-    // Both Admin and Teacher can view students.
-    $allowedRoles = ["admin", "teacher"];
+    $userId = (int) ($user["id"] ?? 0);
+    $role = strtolower(trim($user["role"] ?? ""));
 
-    if (!in_array($user["role"], $allowedRoles, true)) {
-
-        http_response_code(403);
-
-        echo json_encode([
+    if (!in_array($role, ["admin", "teacher"], true)) {
+        sendJsonResponse(403, [
             "success" => false,
             "message" => "You do not have permission to view students"
         ]);
-
-        exit;
     }
 
-    // ======================================================
-    // Get Class and Section
-    // ======================================================
+    // 3. Read parameters safely.
+    $className = (
+        isset($_POST["class_name"])
+        && is_string($_POST["class_name"])
+    ) ? trim($_POST["class_name"]) : "";
 
-    $class_name = isset($_POST["class_name"])
-        ? trim($_POST["class_name"])
-        : "";
+    $section = (
+        isset($_POST["section"])
+        && is_string($_POST["section"])
+    ) ? trim($_POST["section"]) : "";
 
-    $section = isset($_POST["section"])
-        ? trim($_POST["section"])
-        : "";
-
-    // ======================================================
-    // Validation
-    // ======================================================
-
-    if ($class_name === "" || $section === "") {
-
-        http_response_code(400);
-
-        echo json_encode([
+    if ($className === "" || $section === "") {
+        sendJsonResponse(400, [
             "success" => false,
             "message" => "Class and section are required"
         ]);
-
-        exit;
     }
 
-    // ======================================================
-    // SQL Query
-    // ======================================================
+    // Prevent excessively long input.
+    if (strlen($className) > 100 || strlen($section) > 50) {
+        sendJsonResponse(400, [
+            "success" => false,
+            "message" => "Invalid class or section value"
+        ]);
+    }
 
-    $sql = "SELECT
-                id,
-                name,
-                roll_number,
-                class_name,
-                section,
-                email,
-                phone,
-                photo
-            FROM students
-            WHERE class_name = ?
-            AND section = ?
-            ORDER BY roll_number ASC";
+    global $conn;
 
-    // ======================================================
-    // Prepare Statement
-    // ======================================================
+    // 4. Verify teacher assignment.
+    // Admin can access any class and section.
+    if ($role === "teacher") {
+
+        $accessSql = "
+            SELECT 1
+            FROM class_routines
+            WHERE teacher_user_id = ?
+              AND class_name = ?
+              AND section = ?
+              AND is_active = 1
+            LIMIT 1
+        ";
+
+        $accessStmt = $conn->prepare($accessSql);
+
+        $accessStmt->bind_param(
+            "iss",
+            $userId,
+            $className,
+            $section
+        );
+
+        $accessStmt->execute();
+
+        $hasAccess =
+            $accessStmt->get_result()->num_rows > 0;
+
+        $accessStmt->close();
+
+        if (!$hasAccess) {
+            sendJsonResponse(403, [
+                "success" => false,
+                "message" =>
+                    "You are not assigned to this class and section"
+            ]);
+        }
+    }
+
+    // 5. Fetch students only after authorization.
+    $sql = "
+        SELECT
+            id,
+            name,
+            roll_number,
+            class_name,
+            section,
+            email,
+            phone,
+            photo
+        FROM students
+        WHERE class_name = ?
+          AND section = ?
+        ORDER BY
+            CAST(roll_number AS UNSIGNED) ASC,
+            roll_number ASC
+    ";
 
     $stmt = $conn->prepare($sql);
 
-    // ======================================================
-    // Bind Parameters
-    // ======================================================
-
     $stmt->bind_param(
         "ss",
-        $class_name,
+        $className,
         $section
     );
-
-    // ======================================================
-    // Execute Query
-    // ======================================================
 
     $stmt->execute();
 
     $result = $stmt->get_result();
 
-    // ======================================================
-    // Fetch Students
-    // ======================================================
-
     $students = [];
 
     while ($row = $result->fetch_assoc()) {
-
         $students[] = $row;
     }
 
-    // ======================================================
-    // JSON Response
-    // ======================================================
+    $stmt->close();
 
-    echo json_encode([
+    // 6. Preserve the existing JSON response structure.
+    sendJsonResponse(200, [
         "success" => true,
         "message" => "Students fetched successfully",
-        "class_name" => $class_name,
+        "class_name" => $className,
         "section" => $section,
         "total_students" => count($students),
         "students" => $students
     ]);
 
-    // ======================================================
-    // Close Resources
-    // ======================================================
-
-    $stmt->close();
-    $conn->close();
-
 } catch (Throwable $e) {
 
-    http_response_code(500);
+    error_log(
+        "get_students_by_class_section.php error: "
+        . $e->getMessage()
+    );
 
-    echo json_encode([
+    sendJsonResponse(500, [
         "success" => false,
         "message" => "An internal server error occurred"
     ]);
 
-    error_log("get_students_by_class_section.php: "
-        . $e->getMessage());
-}
+} finally {
 
+    if (isset($conn) && $conn instanceof mysqli) {
+        $conn->close();
+    }
+}
 ?>

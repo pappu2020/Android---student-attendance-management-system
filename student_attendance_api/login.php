@@ -7,143 +7,164 @@ require_once "db.php";
 
 mysqli_report(MYSQLI_REPORT_ERROR | MYSQLI_REPORT_STRICT);
 
+function sendJsonResponse(int $statusCode, array $data): void
+{
+    http_response_code($statusCode);
+
+    echo json_encode(
+        $data,
+        JSON_UNESCAPED_UNICODE
+    );
+
+    exit;
+}
+
 try {
-
-    // Allow POST requests only.
+    // 1. Allow POST requests only.
     if ($_SERVER["REQUEST_METHOD"] !== "POST") {
-        http_response_code(405);
+        header("Allow: POST");
 
-        echo json_encode([
+        sendJsonResponse(405, [
             "success" => false,
             "message" => "Only POST method is allowed"
         ]);
-
-        exit;
     }
 
-    // Read login credentials.
-    $email = isset($_POST["email"])
+    // 2. Validate login input.
+    $email = isset($_POST["email"]) &&
+             is_string($_POST["email"])
         ? trim($_POST["email"])
         : "";
 
-    $password = isset($_POST["password"])
+    $password = isset($_POST["password"]) &&
+                is_string($_POST["password"])
         ? $_POST["password"]
         : "";
 
-    if ($email === "" || $password === "") {
-        http_response_code(400);
-
-        echo json_encode([
+    if (
+        $email === "" ||
+        strlen($email) > 254 ||
+        !filter_var($email, FILTER_VALIDATE_EMAIL) ||
+        $password === "" ||
+        strlen($password) > 4096
+    ) {
+        sendJsonResponse(400, [
             "success" => false,
-            "message" => "Email and password are required"
+            "message" => "Valid email and password are required"
         ]);
-
-        exit;
     }
 
-    // Find user by email.
-    $sql = "
+    // 3. Find the user using a prepared statement.
+    $stmt = $conn->prepare("
         SELECT id, name, email, password, role
         FROM users
         WHERE email = ?
         LIMIT 1
-    ";
+    ");
 
-    $stmt = $conn->prepare($sql);
     $stmt->bind_param("s", $email);
     $stmt->execute();
 
-    $result = $stmt->get_result();
-    $user = $result->fetch_assoc();
+    $user = $stmt->get_result()->fetch_assoc();
 
     $stmt->close();
 
-    // Verify the hashed password.
+    // Do not reveal whether the email exists.
     if (
         !$user ||
         !password_verify($password, $user["password"])
     ) {
-        http_response_code(401);
-
-        echo json_encode([
+        sendJsonResponse(401, [
             "success" => false,
             "message" => "Invalid email or password"
         ]);
-
-        exit;
     }
 
-    // Validate the user's role.
-    $role = strtolower(trim($user["role"]));
+    // 4. Permit only supported account roles.
+    $role = strtolower(trim((string) $user["role"]));
 
     if (!in_array($role, ["admin", "teacher"], true)) {
-        http_response_code(403);
-
-        echo json_encode([
+        sendJsonResponse(403, [
             "success" => false,
             "message" => "Account role is not permitted"
         ]);
-
-        exit;
     }
 
-    // Generate a secure random token.
+    // 5. Generate a cryptographically secure token.
     $token = bin2hex(random_bytes(32));
     $tokenHash = hash("sha256", $token);
 
-    // Remove expired tokens belonging to this user.
-    $cleanup = $conn->prepare("
-        DELETE FROM user_tokens
-        WHERE user_id = ?
-          AND expires_at <= NOW()
-    ");
+    // 6. Create the token record and clean up expired tokens.
+    $conn->begin_transaction();
 
-    $cleanup->bind_param("i", $user["id"]);
-    $cleanup->execute();
-    $cleanup->close();
+    try {
+        $cleanup = $conn->prepare("
+            DELETE FROM user_tokens
+            WHERE user_id = ?
+              AND expires_at <= NOW()
+        ");
 
-    // Store only the token hash.
-    // The token expires after 12 hours.
-    $insert = $conn->prepare("
-        INSERT INTO user_tokens
-            (user_id, token_hash, expires_at)
-        VALUES
-            (?, ?, DATE_ADD(NOW(), INTERVAL 12 HOUR))
-    ");
+        $userId = (int) $user["id"];
 
-    $insert->bind_param(
-        "is",
-        $user["id"],
-        $tokenHash
-    );
+        $cleanup->bind_param("i", $userId);
+        $cleanup->execute();
+        $cleanup->close();
 
-    $insert->execute();
-    $insert->close();
+        // Store only the token hash, never the raw token.
+        $insert = $conn->prepare("
+            INSERT INTO user_tokens (
+                user_id,
+                token_hash,
+                expires_at
+            )
+            VALUES (
+                ?,
+                ?,
+                DATE_ADD(NOW(), INTERVAL 12 HOUR)
+            )
+        ");
 
-    // Return the token and safe user information.
-    echo json_encode([
+        $insert->bind_param(
+            "is",
+            $userId,
+            $tokenHash
+        );
+
+        $insert->execute();
+        $insert->close();
+
+        $conn->commit();
+
+    } catch (Throwable $e) {
+        $conn->rollback();
+        throw $e;
+    }
+
+    // 7. Preserve the Android app's expected response fields.
+    sendJsonResponse(200, [
         "success" => true,
         "message" => "Login successful",
         "token" => $token,
+
         "user" => [
             "id" => (int) $user["id"],
             "name" => $user["name"],
             "email" => $user["email"],
             "role" => $role
         ]
-    ], JSON_UNESCAPED_UNICODE);
+    ]);
 
 } catch (Throwable $e) {
+    error_log(
+        "login.php error: " . $e->getMessage()
+    );
 
-    http_response_code(500);
-
-    echo json_encode([
+    sendJsonResponse(500, [
         "success" => false,
         "message" => "Unable to process login"
-    ], JSON_UNESCAPED_UNICODE);
+    ]);
 
 } finally {
-
     if (isset($conn) && $conn instanceof mysqli) {
         $conn->close();
     }

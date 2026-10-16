@@ -6,32 +6,59 @@ require_once "db.php";
 mysqli_report(MYSQLI_REPORT_ERROR | MYSQLI_REPORT_STRICT);
 
 /**
- * Read and validate the Bearer token.
- * Returns the authenticated user or sends an error response.
+ * Send a JSON error response and stop execution.
+ */
+function authError(int $statusCode, string $message): void
+{
+    http_response_code($statusCode);
+
+    echo json_encode([
+        "success" => false,
+        "message" => $message
+    ], JSON_UNESCAPED_UNICODE);
+
+    exit;
+}
+
+/**
+ * Read the Authorization header safely.
+ */
+function getAuthorizationHeader(): string
+{
+    $authorization = $_SERVER["HTTP_AUTHORIZATION"] ?? "";
+
+    if ($authorization === "" && function_exists("getallheaders")) {
+        $headers = getallheaders();
+
+        foreach ($headers as $key => $value) {
+            if (strtolower($key) === "authorization") {
+                $authorization = is_string($value) ? $value : "";
+                break;
+            }
+        }
+    }
+
+    return trim($authorization);
+}
+
+/**
+ * Authenticate a request using its Bearer token.
+ *
+ * Returns the authenticated user.
+ * The database stores only the SHA-256 token hash.
  */
 function requireAuth(): array
 {
     global $conn;
 
-    $headers = function_exists("getallheaders")
-        ? getallheaders()
-        : [];
-
-    $authorization = $headers["Authorization"]
-        ?? $headers["authorization"]
-        ?? "";
+    $authorization = getAuthorizationHeader();
 
     if (!preg_match(
         '/^Bearer\s+([a-f0-9]{64})$/i',
-        trim($authorization),
+        $authorization,
         $matches
     )) {
-        http_response_code(401);
-        echo json_encode([
-            "success" => false,
-            "message" => "Authentication required"
-        ]);
-        exit;
+        authError(401, "Authentication required");
     }
 
     $tokenHash = hash("sha256", $matches[1]);
@@ -42,8 +69,8 @@ function requireAuth(): array
             u.name,
             u.email,
             u.role
-        FROM user_tokens t
-        INNER JOIN users u ON u.id = t.user_id
+        FROM user_tokens AS t
+        INNER JOIN users AS u ON u.id = t.user_id
         WHERE t.token_hash = ?
           AND t.expires_at > NOW()
         LIMIT 1
@@ -53,18 +80,19 @@ function requireAuth(): array
     $stmt->bind_param("s", $tokenHash);
     $stmt->execute();
 
-    $result = $stmt->get_result();
-    $user = $result->fetch_assoc();
+    $user = $stmt->get_result()->fetch_assoc();
 
     $stmt->close();
 
     if (!$user) {
-        http_response_code(401);
-        echo json_encode([
-            "success" => false,
-            "message" => "Invalid or expired token"
-        ]);
-        exit;
+        authError(401, "Invalid or expired token");
+    }
+
+    $user["id"] = (int) $user["id"];
+    $user["role"] = strtolower(trim($user["role"]));
+
+    if (!in_array($user["role"], ["admin", "teacher"], true)) {
+        authError(403, "Account role is not permitted");
     }
 
     return $user;
@@ -77,14 +105,24 @@ function requireAdmin(): array
 {
     $user = requireAuth();
 
-    if (strtolower($user["role"]) !== "admin") {
-        http_response_code(403);
-        echo json_encode([
-            "success" => false,
-            "message" => "Admin permission required"
-        ]);
-        exit;
+    if ($user["role"] !== "admin") {
+        authError(403, "Admin permission required");
     }
 
     return $user;
 }
+
+/**
+ * Require an authenticated teacher.
+ */
+function requireTeacher(): array
+{
+    $user = requireAuth();
+
+    if ($user["role"] !== "teacher") {
+        authError(403, "Teacher permission required");
+    }
+
+    return $user;
+}
+?>

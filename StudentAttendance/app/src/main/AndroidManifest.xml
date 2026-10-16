@@ -84,6 +84,18 @@
             android:exported="false" />
 
 
+
+        <activity
+            android:name=".TimetableActivity"
+            android:exported="false" />
+
+
+        <activity
+            android:name=".TeacherListActivity"
+            android:exported="false" />
+
+
+
     </application>
 
 </manifest>

@@ -1,186 +1,457 @@
+
 <?php
 
 header("Content-Type: application/json; charset=UTF-8");
 
-require_once "db.php";
+require_once "auth.php";
 
-// Only POST request allowed
-if ($_SERVER["REQUEST_METHOD"] !== "POST") {
+date_default_timezone_set("Asia/Kolkata");
 
-    http_response_code(405);
+mysqli_report(MYSQLI_REPORT_ERROR | MYSQLI_REPORT_STRICT);
 
-    echo json_encode([
-        "success" => false,
-        "message" => "Only POST method is allowed"
-    ]);
+function sendJsonResponse(int $code, array $data): void
+{
+    http_response_code($code);
 
-    exit;
-}
-
-
-// Get POST data
-$student_id = isset($_POST["student_id"])
-    ? trim($_POST["student_id"])
-    : "";
-
-$attendance_date = isset($_POST["attendance_date"])
-    ? trim($_POST["attendance_date"])
-    : "";
-
-$status = isset($_POST["status"])
-    ? trim($_POST["status"])
-    : "";
-
-
-// Validate required fields
-if (
-    $student_id === "" ||
-    $attendance_date === "" ||
-    $status === ""
-) {
-
-    http_response_code(400);
-
-    echo json_encode([
-        "success" => false,
-        "message" => "Student ID, date and status are required"
-    ]);
+    echo json_encode(
+        $data,
+        JSON_UNESCAPED_UNICODE
+    );
 
     exit;
 }
 
+try {
 
-// Validate status
-if (
-    $status !== "Present" &&
-    $status !== "Absent"
-) {
+    // --------------------------------------------------
+    // 1. Validate HTTP method
+    // --------------------------------------------------
 
-    http_response_code(400);
+    if ($_SERVER["REQUEST_METHOD"] !== "POST") {
 
-    echo json_encode([
-        "success" => false,
-        "message" => "Invalid attendance status"
-    ]);
+        header("Allow: POST");
 
-    exit;
-}
+        sendJsonResponse(405, [
+            "success" => false,
+            "message" => "Only POST method is allowed"
+        ]);
+    }
 
+    // --------------------------------------------------
+    // 2. Authenticate user
+    // --------------------------------------------------
 
-// Check whether student exists
-$checkSql = "SELECT id FROM students WHERE id = ?";
+    $user = requireAuth();
 
-$checkStmt = $conn->prepare($checkSql);
+    $userId = (int)($user["id"] ?? 0);
+    $role = strtolower(trim($user["role"] ?? ""));
 
-if (!$checkStmt) {
+    if (
+        $userId < 1 ||
+        !in_array($role, ["admin", "teacher"], true)
+    ) {
+        sendJsonResponse(403, [
+            "success" => false,
+            "message" => "Admin or Teacher permission required"
+        ]);
+    }
 
-    http_response_code(500);
+    global $conn;
 
-    echo json_encode([
-        "success" => false,
-        "message" => "Failed to prepare student query"
-    ]);
+    if (
+        !isset($conn) ||
+        !($conn instanceof mysqli)
+    ) {
+        throw new RuntimeException(
+            "Database connection unavailable"
+        );
+    }
 
-    exit;
-}
+    // --------------------------------------------------
+    // 3. Read and validate POST parameters
+    // --------------------------------------------------
 
+    $studentInput = trim(
+        (string)($_POST["student_id"] ?? "")
+    );
 
-$checkStmt->bind_param(
-    "i",
-    $student_id
-);
+    $routineInput = trim(
+        (string)($_POST["routine_id"] ?? "")
+    );
 
-$checkStmt->execute();
+    $date = trim(
+        (string)($_POST["attendance_date"] ?? "")
+    );
 
-$result = $checkStmt->get_result();
+    $status = trim(
+        (string)($_POST["status"] ?? "")
+    );
 
+    if (
+        $studentInput === "" ||
+        !ctype_digit($studentInput) ||
+        (int)$studentInput < 1
+    ) {
+        sendJsonResponse(400, [
+            "success" => false,
+            "message" => "Valid student_id is required"
+        ]);
+    }
 
-if ($result->num_rows === 0) {
+    if (
+        $routineInput === "" ||
+        !ctype_digit($routineInput) ||
+        (int)$routineInput < 1
+    ) {
+        sendJsonResponse(400, [
+            "success" => false,
+            "message" => "Valid routine_id is required"
+        ]);
+    }
 
-    echo json_encode([
-        "success" => false,
-        "message" => "Student not found"
-    ]);
+    if (
+        !preg_match(
+            '/^(\d{4})-(\d{2})-(\d{2})$/',
+            $date,
+            $parts
+        ) ||
+        !checkdate(
+            (int)$parts[2],
+            (int)$parts[3],
+            (int)$parts[1]
+        )
+    ) {
+        sendJsonResponse(400, [
+            "success" => false,
+            "message" => "Invalid date. Use YYYY-MM-DD."
+        ]);
+    }
 
-    $checkStmt->close();
-    $conn->close();
+    if (
+        !in_array(
+            $status,
+            ["Present", "Absent"],
+            true
+        )
+    ) {
+        sendJsonResponse(400, [
+            "success" => false,
+            "message" => "Status must be Present or Absent"
+        ]);
+    }
 
-    exit;
-}
+    $studentId = (int)$studentInput;
+    $routineId = (int)$routineInput;
 
+    // --------------------------------------------------
+    // 4. Load student
+    // --------------------------------------------------
 
-$checkStmt->close();
+    $stmt = $conn->prepare(
+        "SELECT id, class_name, section
+         FROM students
+         WHERE id = ?
+         LIMIT 1"
+    );
 
+    $stmt->bind_param("i", $studentId);
+    $stmt->execute();
 
-// Insert or update attendance
-$sql = "
-    INSERT INTO attendance
-    (
-        student_id,
-        attendance_date,
-        status
-    )
-    VALUES
-    (
-        ?,
-        ?,
-        ?
-    )
-    ON DUPLICATE KEY UPDATE
-        status = ?
-";
+    $student = $stmt->get_result()->fetch_assoc();
 
+    $stmt->close();
 
-$stmt = $conn->prepare($sql);
+    if (!$student) {
+        sendJsonResponse(404, [
+            "success" => false,
+            "message" => "Student not found"
+        ]);
+    }
 
+    // --------------------------------------------------
+    // 5. Load active routine
+    // --------------------------------------------------
 
-if (!$stmt) {
+    $stmt = $conn->prepare(
+        "SELECT
+            id,
+            class_name,
+            section,
+            subject_id,
+            teacher_user_id,
+            day_of_week,
+            start_time,
+            end_time,
+            is_active
+         FROM class_routines
+         WHERE id = ?
+         LIMIT 1"
+    );
 
-    http_response_code(500);
+    $stmt->bind_param("i", $routineId);
+    $stmt->execute();
 
-    echo json_encode([
-        "success" => false,
-        "message" => "Failed to prepare attendance query"
-    ]);
+    $routine = $stmt->get_result()->fetch_assoc();
 
-    exit;
-}
+    $stmt->close();
 
+    if (
+        !$routine ||
+        (int)$routine["is_active"] !== 1
+    ) {
+        sendJsonResponse(404, [
+            "success" => false,
+            "message" => "Active routine not found"
+        ]);
+    }
 
-// Bind parameters
-$stmt->bind_param(
-    "isss",
-    $student_id,
-    $attendance_date,
-    $status,
-    $status
-);
+    // --------------------------------------------------
+    // 6. Verify student class and section
+    // --------------------------------------------------
 
+    if (
+        trim($student["class_name"]) !==
+            trim($routine["class_name"]) ||
+        trim($student["section"]) !==
+            trim($routine["section"])
+    ) {
+        sendJsonResponse(403, [
+            "success" => false,
+            "message" =>
+                "Student does not belong to this routine"
+        ]);
+    }
 
-// Execute query
-if ($stmt->execute()) {
+    // --------------------------------------------------
+    // 7. Verify teacher assignment
+    // --------------------------------------------------
 
-    echo json_encode([
+    $assignedTeacherId = (int)$routine["teacher_user_id"];
+
+    if (
+        $role === "teacher" &&
+        $assignedTeacherId !== $userId
+    ) {
+        sendJsonResponse(403, [
+            "success" => false,
+            "message" =>
+                "You are not assigned to this routine"
+        ]);
+    }
+
+    // --------------------------------------------------
+    // 8. Validate routine weekday
+    // Monday = 1, Tuesday = 2 ... Sunday = 7
+    // --------------------------------------------------
+
+    $dateObject = DateTime::createFromFormat(
+        "!Y-m-d",
+        $date,
+        new DateTimeZone("Asia/Kolkata")
+    );
+
+    if (!$dateObject) {
+        sendJsonResponse(400, [
+            "success" => false,
+            "message" => "Invalid attendance date"
+        ]);
+    }
+
+    $routineDay = (int)$dateObject->format("N");
+
+    if (
+        $routineDay !==
+        (int)$routine["day_of_week"]
+    ) {
+        sendJsonResponse(400, [
+            "success" => false,
+            "message" =>
+                "Selected date does not match this routine's weekday"
+        ]);
+    }
+
+    // --------------------------------------------------
+    // 9. Enforce teacher's assigned time window
+    // Start time inclusive; end time exclusive.
+    // Admin is exempt from the time restriction.
+    // --------------------------------------------------
+
+    if ($role === "teacher") {
+
+        $today = date("Y-m-d");
+        $now = date("H:i:s");
+
+        if ($date !== $today) {
+            sendJsonResponse(403, [
+                "success" => false,
+                "message" =>
+                    "Attendance can only be marked on the scheduled date"
+            ]);
+        }
+
+        $startTime = $routine["start_time"];
+        $endTime = $routine["end_time"];
+
+        if (
+            $now < $startTime ||
+            $now >= $endTime
+        ) {
+            sendJsonResponse(403, [
+                "success" => false,
+                "message" =>
+                    "Attendance is allowed only during the assigned period"
+            ]);
+        }
+    }
+
+    // --------------------------------------------------
+    // 10. Create or retrieve class session
+    // Requires UNIQUE(routine_id, class_date)
+    // --------------------------------------------------
+
+    $conn->begin_transaction();
+
+    $stmt = $conn->prepare(
+        "INSERT INTO class_sessions (
+            routine_id,
+            class_date,
+            original_teacher_id,
+            assigned_teacher_id
+         )
+         VALUES (?, ?, ?, ?)
+         ON DUPLICATE KEY UPDATE
+            id = LAST_INSERT_ID(id)"
+    );
+
+    $stmt->bind_param(
+        "isii",
+        $routineId,
+        $date,
+        $assignedTeacherId,
+        $assignedTeacherId
+    );
+
+    $stmt->execute();
+
+    $sessionId = (int)$conn->insert_id;
+
+    $stmt->close();
+
+    if ($sessionId < 1) {
+
+        $sessionStmt = $conn->prepare(
+            "SELECT id
+             FROM class_sessions
+             WHERE routine_id = ?
+               AND class_date = ?
+             LIMIT 1"
+        );
+
+        $sessionStmt->bind_param(
+            "is",
+            $routineId,
+            $date
+        );
+
+        $sessionStmt->execute();
+
+        $sessionRow =
+            $sessionStmt->get_result()->fetch_assoc();
+
+        $sessionStmt->close();
+
+        $sessionId = (int)(
+            $sessionRow["id"] ?? 0
+        );
+    }
+
+    if ($sessionId < 1) {
+        throw new RuntimeException(
+            "Could not create or retrieve class session"
+        );
+    }
+
+    // --------------------------------------------------
+    // 11. Insert or update attendance
+    // Requires UNIQUE(student_id, class_session_id)
+    // --------------------------------------------------
+
+    $stmt = $conn->prepare(
+        "INSERT INTO attendance (
+            student_id,
+            class_session_id,
+            taken_by_teacher_id,
+            attendance_date,
+            status
+         )
+         VALUES (?, ?, ?, ?, ?)
+         ON DUPLICATE KEY UPDATE
+            status = VALUES(status),
+            taken_by_teacher_id =
+                VALUES(taken_by_teacher_id)"
+    );
+
+    $stmt->bind_param(
+        "iiiss",
+        $studentId,
+        $sessionId,
+        $assignedTeacherId,
+        $date,
+        $status
+    );
+
+    $stmt->execute();
+
+    $stmt->close();
+
+    // --------------------------------------------------
+    // 12. Commit transaction
+    // --------------------------------------------------
+
+    $conn->commit();
+
+    sendJsonResponse(200, [
         "success" => true,
         "message" => "Attendance saved successfully",
-        "student_id" => $student_id,
-        "attendance_date" => $attendance_date,
-        "status" => $status
+        "student_id" => $studentId,
+        "routine_id" => $routineId,
+        "class_session_id" => $sessionId,
+        "taken_by_teacher_id" => $assignedTeacherId,
+        "attendance_date" => $date,
+        "status" => $status,
+        "timezone" => "Asia/Kolkata"
     ]);
 
-} else {
+} catch (Throwable $e) {
 
-    http_response_code(500);
+    if (
+        isset($conn) &&
+        $conn instanceof mysqli
+    ) {
+        try {
+            $conn->rollback();
+        } catch (Throwable $ignored) {
+            // Ignore rollback errors.
+        }
+    }
 
-    echo json_encode([
+    error_log(
+        "mark_attendance.php error: " .
+        $e->getMessage()
+    );
+
+    sendJsonResponse(500, [
         "success" => false,
-        "message" => "Failed to save attendance",
-        "error" => $stmt->error
+        "message" => "Failed to save attendance"
     ]);
+
+} finally {
+
+    if (
+        isset($conn) &&
+        $conn instanceof mysqli
+    ) {
+        $conn->close();
+    }
 }
-
-
-$stmt->close();
-$conn->close();
-
 ?>

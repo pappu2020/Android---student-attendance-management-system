@@ -1,92 +1,123 @@
+
 <?php
+
+header("Content-Type: application/json; charset=UTF-8");
+
+mysqli_report(MYSQLI_REPORT_ERROR | MYSQLI_REPORT_STRICT);
+
+// This setup script must never be run through a web request.
+if (PHP_SAPI !== "cli") {
+    http_response_code(403);
+
+    echo json_encode([
+        "success" => false,
+        "message" => "Run this setup script from the command line"
+    ], JSON_UNESCAPED_UNICODE);
+
+    exit(1);
+}
 
 require_once "db.php";
 
-$name = "Admin";
-$email = "admin@gmail.com";
-$password = "admin123";
-$role = "admin";
+try {
 
-// Check whether the user already exists
-$check_sql = "SELECT id FROM users WHERE email = ?";
+    // Read credentials from temporary environment variables.
+    $name = trim(getenv("ADMIN_NAME") ?: "");
+    $email = trim(getenv("ADMIN_EMAIL") ?: "");
+    $password = getenv("ADMIN_PASSWORD");
 
-$check_stmt = $conn->prepare($check_sql);
+    if (
+        $name === "" ||
+        strlen($name) > 100 ||
+        $email === "" ||
+        strlen($email) > 254 ||
+        !filter_var($email, FILTER_VALIDATE_EMAIL) ||
+        $password === false ||
+        $password === "" ||
+        strlen($password) < 10 ||
+        strlen($password) > 72
+    ) {
+        fwrite(
+            STDERR,
+            "Set valid ADMIN_NAME, ADMIN_EMAIL and ADMIN_PASSWORD environment variables.\n"
+        );
 
-if (!$check_stmt) {
-    echo json_encode([
-        "success" => false,
-        "message" => "Failed to prepare user check"
-    ]);
-    exit;
+        exit(1);
+    }
+
+    // Check whether an account with this email already exists.
+    $check = $conn->prepare(
+        "SELECT id FROM users WHERE email = ? LIMIT 1"
+    );
+
+    $check->bind_param("s", $email);
+    $check->execute();
+
+    $existing = $check->get_result()->fetch_assoc();
+
+    $check->close();
+
+    if ($existing) {
+        fwrite(
+            STDERR,
+            "An account with this email already exists. No account was created.\n"
+        );
+
+        exit(1);
+    }
+
+    // Hash the password before storing it.
+    $hashedPassword = password_hash(
+        $password,
+        PASSWORD_DEFAULT
+    );
+
+    if ($hashedPassword === false) {
+        throw new RuntimeException("Password hashing failed");
+    }
+
+    // The role is fixed; it cannot be supplied by the caller.
+    $role = "admin";
+
+    $stmt = $conn->prepare(
+        "INSERT INTO users (name, email, password, role)
+         VALUES (?, ?, ?, ?)"
+    );
+
+    $stmt->bind_param(
+        "ssss",
+        $name,
+        $email,
+        $hashedPassword,
+        $role
+    );
+
+    $stmt->execute();
+
+    fwrite(
+        STDOUT,
+        "Admin account created successfully.\n"
+    );
+
+    $stmt->close();
+
+} catch (Throwable $e) {
+
+    error_log(
+        "create_admin.php error: " . $e->getMessage()
+    );
+
+    fwrite(
+        STDERR,
+        "Unable to create the admin account. Check the PHP error log.\n"
+    );
+
+    exit(1);
+
+} finally {
+
+    if (isset($conn) && $conn instanceof mysqli) {
+        $conn->close();
+    }
 }
-
-$check_stmt->bind_param("s", $email);
-$check_stmt->execute();
-
-$result = $check_stmt->get_result();
-
-if ($result->num_rows > 0) {
-
-    echo json_encode([
-        "success" => false,
-        "message" => "Admin account already exists"
-    ]);
-
-    $check_stmt->close();
-    $conn->close();
-
-    exit;
-}
-
-$check_stmt->close();
-
-// Hash the password
-$hashed_password = password_hash(
-    $password,
-    PASSWORD_DEFAULT
-);
-
-// Insert new user
-$sql = "INSERT INTO users (name, email, password, role)
-        VALUES (?, ?, ?, ?)";
-
-$stmt = $conn->prepare($sql);
-
-if (!$stmt) {
-
-    echo json_encode([
-        "success" => false,
-        "message" => "Failed to prepare insert query"
-    ]);
-
-    exit;
-}
-
-$stmt->bind_param(
-    "ssss",
-    $name,
-    $email,
-    $hashed_password,
-    $role
-);
-
-if ($stmt->execute()) {
-
-    echo json_encode([
-        "success" => true,
-        "message" => "Admin account created successfully",
-        "email" => $email
-    ]);
-
-} else {
-
-    echo json_encode([
-        "success" => false,
-        "message" => "Failed to create admin account"
-    ]);
-}
-
-$stmt->close();
-$conn->close();
-
 ?>

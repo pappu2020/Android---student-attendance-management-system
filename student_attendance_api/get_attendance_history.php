@@ -1,261 +1,276 @@
+
 <?php
 
 header("Content-Type: application/json; charset=UTF-8");
 
-require_once "db.php";
+require_once "auth.php";
 
+mysqli_report(MYSQLI_REPORT_ERROR | MYSQLI_REPORT_STRICT);
 
-/*
-|--------------------------------------------------------------------------
-| Only POST method is allowed
-|--------------------------------------------------------------------------
-*/
+function sendJsonResponse(int $statusCode, array $data): void
+{
+    http_response_code($statusCode);
 
-if ($_SERVER["REQUEST_METHOD"] !== "POST") {
-
-    http_response_code(405);
-
-    echo json_encode([
-        "success" => false,
-        "message" => "Only POST method is allowed"
-    ]);
+    echo json_encode(
+        $data,
+        JSON_UNESCAPED_UNICODE
+    );
 
     exit;
 }
 
+try {
 
-/*
-|--------------------------------------------------------------------------
-| Receive input
-|--------------------------------------------------------------------------
-*/
+    // 1. Allow POST requests only.
+    if ($_SERVER["REQUEST_METHOD"] !== "POST") {
+        header("Allow: POST");
 
-$class_name = isset($_POST["class_name"])
-    ? trim($_POST["class_name"])
-    : "";
+        sendJsonResponse(405, [
+            "success" => false,
+            "message" => "Only POST method is allowed"
+        ]);
+    }
 
-$section = isset($_POST["section"])
-    ? trim($_POST["section"])
-    : "";
+    // 2. Authenticate the user.
+    $user = requireAuth();
 
-$attendance_date = isset($_POST["attendance_date"])
-    ? trim($_POST["attendance_date"])
-    : "";
+    $userId = (int) ($user["id"] ?? 0);
+    $role = strtolower(trim($user["role"] ?? ""));
 
+    if (!in_array($role, ["admin", "teacher"], true)) {
+        sendJsonResponse(403, [
+            "success" => false,
+            "message" =>
+                "You do not have permission to view attendance history"
+        ]);
+    }
 
-/*
-|--------------------------------------------------------------------------
-| Validation
-|--------------------------------------------------------------------------
-*/
+    // 3. Read and validate request parameters.
+    $class_name = isset($_POST["class_name"])
+        && is_string($_POST["class_name"])
+            ? trim($_POST["class_name"])
+            : "";
 
-if ($class_name === "") {
+    $section = isset($_POST["section"])
+        && is_string($_POST["section"])
+            ? trim($_POST["section"])
+            : "";
 
-    http_response_code(400);
+    $attendance_date = isset($_POST["attendance_date"])
+        && is_string($_POST["attendance_date"])
+            ? trim($_POST["attendance_date"])
+            : "";
 
-    echo json_encode([
-        "success" => false,
-        "message" => "Class is required"
-    ]);
+    // 4. Validate required fields.
+    if (
+        $class_name === "" ||
+        $section === "" ||
+        $attendance_date === ""
+    ) {
+        sendJsonResponse(400, [
+            "success" => false,
+            "message" =>
+                "Class, section and attendance date are required"
+        ]);
+    }
 
-    exit;
-}
+    // 5. Validate the date strictly as YYYY-MM-DD.
+    $dateObject = DateTime::createFromFormat(
+        "!Y-m-d",
+        $attendance_date
+    );
 
+    $dateErrors = DateTime::getLastErrors();
 
-if ($section === "") {
+    $isValidDate = (
+        $dateObject !== false
+        && $dateObject->format("Y-m-d") === $attendance_date
+        && (
+            $dateErrors === false
+            || (
+                $dateErrors["warning_count"] === 0
+                && $dateErrors["error_count"] === 0
+            )
+        )
+    );
 
-    http_response_code(400);
+    if (!$isValidDate) {
+        sendJsonResponse(400, [
+            "success" => false,
+            "message" =>
+                "Invalid attendance date. Use YYYY-MM-DD"
+        ]);
+    }
 
-    echo json_encode([
-        "success" => false,
-        "message" => "Section is required"
-    ]);
+    global $conn;
 
-    exit;
-}
+    // 6. Restrict teachers to assigned classes and sections.
+    // Admins can access all classes and sections.
+    if ($role === "teacher") {
 
+        $accessSql = "
+            SELECT 1
+            FROM class_routines
+            WHERE teacher_user_id = ?
+              AND class_name = ?
+              AND section = ?
+              AND is_active = 1
+            LIMIT 1
+        ";
 
-if ($attendance_date === "") {
+        $accessStmt = $conn->prepare($accessSql);
 
-    http_response_code(400);
+        $accessStmt->bind_param(
+            "iss",
+            $userId,
+            $class_name,
+            $section
+        );
 
-    echo json_encode([
-        "success" => false,
-        "message" => "Attendance date is required"
-    ]);
+        $accessStmt->execute();
 
-    exit;
-}
+        $hasAccess =
+            $accessStmt->get_result()->num_rows > 0;
 
+        $accessStmt->close();
 
-/*
-|--------------------------------------------------------------------------
-| Get students and attendance
-|--------------------------------------------------------------------------
-|
-| LEFT JOIN is used so that students without attendance
-| record for the selected date are also displayed.
-|
-*/
+        if (!$hasAccess) {
+            sendJsonResponse(403, [
+                "success" => false,
+                "message" =>
+                    "You are not assigned to this class and section"
+            ]);
+        }
+    }
 
-$sql = "
-    SELECT
-        s.id,
-        s.name,
-        s.roll_number,
-        s.class_name,
-        s.section,
-        s.email,
-        s.phone,
-        s.photo,
-        a.attendance_date,
-        COALESCE(a.status, 'Not Marked') AS status
+    // 7. Fetch attendance history.
+    // Aggregate attendance records to prevent duplicate students.
+    // Students without attendance records remain in the result.
 
-    FROM students s
+    $sql = "
+        SELECT
+            s.id,
+            s.name,
+            s.roll_number,
+            s.class_name,
+            s.section,
+            s.email,
+            s.phone,
+            s.photo,
+            a.attendance_date,
+            COALESCE(a.status, 'Not Marked') AS status
 
-    LEFT JOIN attendance a
-        ON s.id = a.student_id
-        AND a.attendance_date = ?
+        FROM students AS s
 
-    WHERE s.class_name = ?
-        AND s.section = ?
+        LEFT JOIN (
+            SELECT
+                student_id,
+                attendance_date,
 
-    ORDER BY
-        CAST(s.roll_number AS UNSIGNED) ASC,
-        s.roll_number ASC
-";
+                CASE
+                    WHEN SUM(status = 'Present') > 0
+                        THEN 'Present'
+                    WHEN SUM(status = 'Absent') > 0
+                        THEN 'Absent'
+                    ELSE NULL
+                END AS status
 
+            FROM attendance
 
-$stmt = $conn->prepare($sql);
+            WHERE attendance_date = ?
 
+            GROUP BY
+                student_id,
+                attendance_date
+        ) AS a
+            ON a.student_id = s.id
+            AND a.attendance_date = ?
 
-if (!$stmt) {
+        WHERE s.class_name = ?
+          AND s.section = ?
 
-    http_response_code(500);
+        ORDER BY
+            CAST(s.roll_number AS UNSIGNED) ASC,
+            s.roll_number ASC
+    ";
 
-    echo json_encode([
-        "success" => false,
-        "message" => "Failed to prepare database query"
-    ]);
+    $stmt = $conn->prepare($sql);
 
-    exit;
-}
+    $stmt->bind_param(
+        "ssss",
+        $attendance_date,
+        $attendance_date,
+        $class_name,
+        $section
+    );
 
+    $stmt->execute();
 
-/*
-|--------------------------------------------------------------------------
-| Bind parameters
-|--------------------------------------------------------------------------
-*/
+    $result = $stmt->get_result();
 
-$stmt->bind_param(
-    "sss",
-    $attendance_date,
-    $class_name,
-    $section
-);
+    $students = [];
+    $total_students = 0;
+    $present_count = 0;
+    $absent_count = 0;
 
+    while ($row = $result->fetch_assoc()) {
 
-/*
-|--------------------------------------------------------------------------
-| Execute query
-|--------------------------------------------------------------------------
-*/
+        $status = $row["status"];
 
-if (!$stmt->execute()) {
+        if ($status === "Present") {
+            $present_count++;
+        } elseif ($status === "Absent") {
+            $absent_count++;
+        }
 
-    http_response_code(500);
+        $total_students++;
 
-    echo json_encode([
-        "success" => false,
-        "message" => "Failed to fetch attendance history"
-    ]);
+        $students[] = [
+            "id" => $row["id"],
+            "name" => $row["name"],
+            "roll_number" => $row["roll_number"],
+            "class_name" => $row["class_name"],
+            "section" => $row["section"],
+            "email" => $row["email"],
+            "phone" => $row["phone"],
+            "photo" => $row["photo"],
+            "attendance_date" => $row["attendance_date"],
+            "status" => $status
+        ];
+    }
 
     $stmt->close();
-    $conn->close();
 
-    exit;
-}
-
-
-$result = $stmt->get_result();
-
-
-/*
-|--------------------------------------------------------------------------
-| Prepare response
-|--------------------------------------------------------------------------
-*/
-
-$students = [];
-
-$total_students = 0;
-$present_count = 0;
-$absent_count = 0;
-
-
-while ($row = $result->fetch_assoc()) {
-
-    $status = $row["status"];
-
-    if ($status === "Present") {
-        $present_count++;
-    }
-
-    if ($status === "Absent") {
-        $absent_count++;
-    }
-
-    $total_students++;
-
-    $students[] = [
-        "id" => $row["id"],
-        "name" => $row["name"],
-        "roll_number" => $row["roll_number"],
-        "class_name" => $row["class_name"],
-        "section" => $row["section"],
-        "email" => $row["email"],
-        "phone" => $row["phone"],
-        "photo" => $row["photo"],
+    // 8. Return the existing JSON response structure.
+    sendJsonResponse(200, [
+        "success" => true,
+        "message" => "Attendance history fetched successfully",
+        "class_name" => $class_name,
+        "section" => $section,
         "attendance_date" => $attendance_date,
-        "status" => $status
-    ];
+        "total_students" => $total_students,
+        "present_count" => $present_count,
+        "absent_count" => $absent_count,
+        "not_marked_count" =>
+            $total_students - $present_count - $absent_count,
+        "students" => $students
+    ]);
+
+} catch (Throwable $e) {
+
+    error_log(
+        "get_attendance_history.php error: " . $e->getMessage()
+    );
+
+    sendJsonResponse(500, [
+        "success" => false,
+        "message" => "Unable to fetch attendance history"
+    ]);
+
+} finally {
+
+    if (isset($conn) && $conn instanceof mysqli) {
+        $conn->close();
+    }
 }
-
-
-/*
-|--------------------------------------------------------------------------
-| Send JSON response
-|--------------------------------------------------------------------------
-*/
-
-echo json_encode([
-    "success" => true,
-    "message" => "Attendance history fetched successfully",
-
-    "class_name" => $class_name,
-
-    "section" => $section,
-
-    "attendance_date" => $attendance_date,
-
-    "total_students" => $total_students,
-
-    "present_count" => $present_count,
-
-    "absent_count" => $absent_count,
-
-    "not_marked_count" =>
-        $total_students
-        - $present_count
-        - $absent_count,
-
-    "students" => $students
-]);
-
-
-$stmt->close();
-
-$conn->close();
-
 ?>

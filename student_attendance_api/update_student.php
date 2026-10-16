@@ -1,4 +1,3 @@
-
 <?php
 
 header("Content-Type: application/json; charset=UTF-8");
@@ -7,104 +6,132 @@ require_once "auth.php";
 
 mysqli_report(MYSQLI_REPORT_ERROR | MYSQLI_REPORT_STRICT);
 
-// ---------------------------------------------------------
-// Allow POST requests only
-// ---------------------------------------------------------
+function sendJsonResponse(int $statusCode, array $data): void
+{
+    http_response_code($statusCode);
 
-if ($_SERVER["REQUEST_METHOD"] !== "POST") {
-    http_response_code(405);
-
-    echo json_encode([
-        "success" => false,
-        "message" => "Only POST method is allowed"
-    ], JSON_UNESCAPED_UNICODE);
+    echo json_encode(
+        $data,
+        JSON_UNESCAPED_UNICODE
+    );
 
     exit;
 }
 
+// 1. Allow POST requests only.
+if ($_SERVER["REQUEST_METHOD"] !== "POST") {
+    header("Allow: POST");
+
+    sendJsonResponse(405, [
+        "success" => false,
+        "message" => "Only POST method is allowed"
+    ]);
+}
+
 try {
+    // 2. Only Admin can update students.
+    requireAdmin();
 
-    // ---------------------------------------------------------
-    // Admin Authentication
-    // ---------------------------------------------------------
+    global $conn;
 
-    $user = requireAdmin();
-
-    // ---------------------------------------------------------
-    // Read Input
-    // ---------------------------------------------------------
-
-    $id = trim($_POST["id"] ?? "");
-    $name = trim($_POST["name"] ?? "");
-    $roll_number = trim($_POST["roll_number"] ?? "");
-    $class_name = trim($_POST["class_name"] ?? "");
-    $section = trim($_POST["section"] ?? "");
-    $email = trim($_POST["email"] ?? "");
-    $phone = trim($_POST["phone"] ?? "");
-
-    // ---------------------------------------------------------
-    // Validate Student ID
-    // ---------------------------------------------------------
-
-    if (
-        $id === "" ||
-        !ctype_digit($id) ||
-        (int) $id < 1
-    ) {
-        http_response_code(400);
-
-        echo json_encode([
-            "success" => false,
-            "message" => "Invalid student ID"
-        ], JSON_UNESCAPED_UNICODE);
-
-        exit;
+    if (!isset($conn) || !($conn instanceof mysqli)) {
+        throw new RuntimeException(
+            "Database connection unavailable"
+        );
     }
 
-    $studentId = (int) $id;
+    // 3. Validate that all inputs are strings.
+    $fields = [
+        "id",
+        "name",
+        "roll_number",
+        "class_name",
+        "section",
+        "email",
+        "phone"
+    ];
 
-    // ---------------------------------------------------------
-    // Validate Required Fields
-    // ---------------------------------------------------------
+    $input = [];
 
+    foreach ($fields as $field) {
+        if (
+            isset($_POST[$field]) &&
+            !is_string($_POST[$field])
+        ) {
+            sendJsonResponse(400, [
+                "success" => false,
+                "message" => "Invalid input: " . $field
+            ]);
+        }
+
+        $input[$field] = trim(
+            (string) ($_POST[$field] ?? "")
+        );
+    }
+
+    // 4. Validate student ID.
+    if (
+        $input["id"] === "" ||
+        !ctype_digit($input["id"]) ||
+        (int) $input["id"] < 1
+    ) {
+        sendJsonResponse(400, [
+            "success" => false,
+            "message" => "Invalid student ID"
+        ]);
+    }
+
+    $studentId = (int) $input["id"];
+
+    $name = $input["name"];
+    $roll_number = $input["roll_number"];
+    $class_name = $input["class_name"];
+    $section = $input["section"];
+    $email = $input["email"];
+    $phone = $input["phone"];
+
+    // 5. Validate required fields.
     if (
         $name === "" ||
         $roll_number === "" ||
         $class_name === "" ||
         $section === ""
     ) {
-        http_response_code(400);
-
-        echo json_encode([
+        sendJsonResponse(400, [
             "success" => false,
-            "message" => "Name, roll number, class and section are required"
-        ], JSON_UNESCAPED_UNICODE);
-
-        exit;
+            "message" =>
+                "Name, roll number, class and section are required"
+        ]);
     }
 
-    // ---------------------------------------------------------
-    // Validate Optional Email
-    // ---------------------------------------------------------
+    // 6. Validate input lengths.
+    if (
+        mb_strlen($name) > 150 ||
+        mb_strlen($roll_number) > 50 ||
+        mb_strlen($class_name) > 100 ||
+        mb_strlen($section) > 50 ||
+        mb_strlen($email) > 254 ||
+        mb_strlen($phone) > 30
+    ) {
+        sendJsonResponse(400, [
+            "success" => false,
+            "message" =>
+                "One or more fields exceed the allowed length"
+        ]);
+    }
 
+    // 7. Validate optional email.
     if (
         $email !== "" &&
         !filter_var($email, FILTER_VALIDATE_EMAIL)
     ) {
-        http_response_code(400);
-
-        echo json_encode([
+        sendJsonResponse(400, [
             "success" => false,
             "message" => "Invalid email address"
-        ], JSON_UNESCAPED_UNICODE);
-
-        exit;
+        ]);
     }
 
-    // ---------------------------------------------------------
-    // Check Whether Student Exists
-    // ---------------------------------------------------------
-
+    // 8. Confirm that the student exists.
     $checkStudentSql = "
         SELECT id
         FROM students
@@ -113,33 +140,23 @@ try {
     ";
 
     $checkStudentStmt = $conn->prepare($checkStudentSql);
-
     $checkStudentStmt->bind_param("i", $studentId);
-
     $checkStudentStmt->execute();
 
-    $studentResult = $checkStudentStmt->get_result();
-
-    $studentExists = $studentResult->num_rows > 0;
+    $studentExists =
+        $checkStudentStmt->get_result()->num_rows > 0;
 
     $checkStudentStmt->close();
 
     if (!$studentExists) {
-        http_response_code(404);
-
-        echo json_encode([
+        sendJsonResponse(404, [
             "success" => false,
             "message" => "Student not found"
-        ], JSON_UNESCAPED_UNICODE);
-
-        exit;
+        ]);
     }
 
-    // ---------------------------------------------------------
-    // Check Duplicate Roll Number in Same Class and Section
-    // Exclude the current student from the duplicate check.
-    // ---------------------------------------------------------
-
+    // 9. Check duplicate roll number in the same class/section.
+    // Exclude the student currently being updated.
     $checkRollSql = "
         SELECT id
         FROM students
@@ -162,27 +179,20 @@ try {
 
     $checkRollStmt->execute();
 
-    $rollResult = $checkRollStmt->get_result();
-
-    $duplicateRoll = $rollResult->num_rows > 0;
+    $duplicateRoll =
+        $checkRollStmt->get_result()->num_rows > 0;
 
     $checkRollStmt->close();
 
     if ($duplicateRoll) {
-        http_response_code(409);
-
-        echo json_encode([
+        sendJsonResponse(409, [
             "success" => false,
-            "message" => "This roll number already exists in the selected class and section"
-        ], JSON_UNESCAPED_UNICODE);
-
-        exit;
+            "message" =>
+                "This roll number already exists in the selected class and section"
+        ]);
     }
 
-    // ---------------------------------------------------------
-    // Update Student
-    // ---------------------------------------------------------
-
+    // 10. Update the student.
     $sql = "
         UPDATE students
         SET
@@ -209,14 +219,10 @@ try {
     );
 
     $stmt->execute();
-
     $stmt->close();
 
-    // ---------------------------------------------------------
-    // Success Response
-    // ---------------------------------------------------------
-
-    echo json_encode([
+    // 11. Preserve the existing JSON response fields.
+    sendJsonResponse(200, [
         "success" => true,
         "message" => "Student updated successfully",
         "id" => (string) $studentId,
@@ -227,27 +233,22 @@ try {
         "section" => $section,
         "email" => $email,
         "phone" => $phone
-    ], JSON_UNESCAPED_UNICODE);
+    ]);
 
 } catch (Throwable $e) {
-
-    // Keep detailed errors in the server log only.
     error_log(
-        "update_student.php error: " . $e->getMessage()
+        "update_student.php error: " .
+        $e->getMessage()
     );
 
-    http_response_code(500);
-
-    echo json_encode([
+    sendJsonResponse(500, [
         "success" => false,
         "message" => "Unable to update student"
-    ], JSON_UNESCAPED_UNICODE);
+    ]);
 
 } finally {
-
     if (isset($conn) && $conn instanceof mysqli) {
         $conn->close();
     }
 }
-
 ?>

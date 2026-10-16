@@ -7,82 +7,116 @@ require_once "auth.php";
 
 mysqli_report(MYSQLI_REPORT_ERROR | MYSQLI_REPORT_STRICT);
 
-// ---------------------------------------------------------
-// Only POST Method
-// ---------------------------------------------------------
+function sendJsonResponse(int $statusCode, array $data): void
+{
+    http_response_code($statusCode);
 
-if ($_SERVER["REQUEST_METHOD"] !== "POST") {
-    http_response_code(405);
-
-    echo json_encode([
-        "success" => false,
-        "message" => "Only POST method is allowed"
-    ], JSON_UNESCAPED_UNICODE);
+    echo json_encode(
+        $data,
+        JSON_UNESCAPED_UNICODE
+    );
 
     exit;
 }
 
+// 1. POST requests only.
+if ($_SERVER["REQUEST_METHOD"] !== "POST") {
+    header("Allow: POST");
+
+    sendJsonResponse(405, [
+        "success" => false,
+        "message" => "Only POST method is allowed"
+    ]);
+}
+
 try {
+    // 2. Only Admin can add students.
+    requireAdmin();
 
-    // ---------------------------------------------------------
-    // Admin Authentication
-    // ---------------------------------------------------------
+    global $conn;
 
-    $user = requireAdmin();
+    if (!isset($conn) || !($conn instanceof mysqli)) {
+        throw new RuntimeException(
+            "Database connection unavailable"
+        );
+    }
 
-    // ---------------------------------------------------------
-    // Read Input
-    // ---------------------------------------------------------
+    // 3. Validate that each input is a string.
+    $fields = [
+        "name",
+        "roll_number",
+        "class_name",
+        "section",
+        "email",
+        "phone"
+    ];
 
-    $name = trim($_POST["name"] ?? "");
-    $roll_number = trim($_POST["roll_number"] ?? "");
-    $class_name = trim($_POST["class_name"] ?? "");
-    $section = trim($_POST["section"] ?? "");
-    $email = trim($_POST["email"] ?? "");
-    $phone = trim($_POST["phone"] ?? "");
+    $input = [];
 
-    // ---------------------------------------------------------
-    // Validate Required Fields
-    // ---------------------------------------------------------
+    foreach ($fields as $field) {
+        if (
+            isset($_POST[$field]) &&
+            !is_string($_POST[$field])
+        ) {
+            sendJsonResponse(400, [
+                "success" => false,
+                "message" => "Invalid input: " . $field
+            ]);
+        }
 
+        $input[$field] = trim(
+            (string) ($_POST[$field] ?? "")
+        );
+    }
+
+    $name = $input["name"];
+    $roll_number = $input["roll_number"];
+    $class_name = $input["class_name"];
+    $section = $input["section"];
+    $email = $input["email"];
+    $phone = $input["phone"];
+
+    // 4. Validate required fields.
     if (
         $name === "" ||
         $roll_number === "" ||
         $class_name === "" ||
         $section === ""
     ) {
-        http_response_code(400);
-
-        echo json_encode([
+        sendJsonResponse(400, [
             "success" => false,
-            "message" => "Name, roll number, class and section are required"
-        ], JSON_UNESCAPED_UNICODE);
-
-        exit;
+            "message" =>
+                "Name, roll number, class and section are required"
+        ]);
     }
 
-    // ---------------------------------------------------------
-    // Validate Optional Email
-    // ---------------------------------------------------------
+    // 5. Validate field lengths.
+    if (
+        mb_strlen($name) > 150 ||
+        mb_strlen($roll_number) > 50 ||
+        mb_strlen($class_name) > 100 ||
+        mb_strlen($section) > 50 ||
+        mb_strlen($email) > 254 ||
+        mb_strlen($phone) > 30
+    ) {
+        sendJsonResponse(400, [
+            "success" => false,
+            "message" => "One or more fields exceed the allowed length"
+        ]);
+    }
 
+    // 6. Validate optional email.
     if (
         $email !== "" &&
         !filter_var($email, FILTER_VALIDATE_EMAIL)
     ) {
-        http_response_code(400);
-
-        echo json_encode([
+        sendJsonResponse(400, [
             "success" => false,
             "message" => "Invalid email address"
-        ], JSON_UNESCAPED_UNICODE);
-
-        exit;
+        ]);
     }
 
-    // ---------------------------------------------------------
-    // Check Duplicate Roll Number in Same Class and Section
-    // ---------------------------------------------------------
-
+    // 7. Check duplicate roll number in the same class/section.
     $checkSql = "
         SELECT id
         FROM students
@@ -103,26 +137,20 @@ try {
 
     $checkStmt->execute();
 
-    $checkResult = $checkStmt->get_result();
-    $duplicate = $checkResult->num_rows > 0;
+    $duplicate =
+        $checkStmt->get_result()->num_rows > 0;
 
     $checkStmt->close();
 
     if ($duplicate) {
-        http_response_code(409);
-
-        echo json_encode([
+        sendJsonResponse(409, [
             "success" => false,
-            "message" => "This roll number already exists in the selected class and section"
-        ], JSON_UNESCAPED_UNICODE);
-
-        exit;
+            "message" =>
+                "This roll number already exists in the selected class and section"
+        ]);
     }
 
-    // ---------------------------------------------------------
-    // Insert Student
-    // ---------------------------------------------------------
-
+    // 8. Insert the student using a prepared statement.
     $sql = "
         INSERT INTO students (
             name,
@@ -149,18 +177,12 @@ try {
 
     $stmt->execute();
 
-    // Actual numeric primary key from students.id.
     $studentId = $conn->insert_id;
 
     $stmt->close();
 
-    // ---------------------------------------------------------
-    // Success Response
-    // ---------------------------------------------------------
-
-    http_response_code(201);
-
-    echo json_encode([
+    // 9. Preserve the existing Android response fields.
+    sendJsonResponse(201, [
         "success" => true,
         "message" => "Student added successfully",
         "id" => (string) $studentId,
@@ -171,26 +193,21 @@ try {
         "section" => $section,
         "email" => $email,
         "phone" => $phone
-    ], JSON_UNESCAPED_UNICODE);
+    ]);
 
 } catch (Throwable $e) {
-
     error_log(
         "add_student.php error: " . $e->getMessage()
     );
 
-    http_response_code(500);
-
-    echo json_encode([
+    sendJsonResponse(500, [
         "success" => false,
         "message" => "Unable to add student"
-    ], JSON_UNESCAPED_UNICODE);
+    ]);
 
 } finally {
-
     if (isset($conn) && $conn instanceof mysqli) {
         $conn->close();
     }
 }
-
 ?>

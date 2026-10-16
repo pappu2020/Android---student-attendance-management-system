@@ -1,16 +1,53 @@
 
 <?php
-require_once "auth.php";
 
 header("Content-Type: application/json; charset=UTF-8");
 
+require_once "auth.php";
+
 mysqli_report(MYSQLI_REPORT_ERROR | MYSQLI_REPORT_STRICT);
 
+function sendJsonResponse(int $statusCode, array $data): void
+{
+    http_response_code($statusCode);
+
+    echo json_encode(
+        $data,
+        JSON_UNESCAPED_UNICODE
+    );
+
+    exit;
+}
+
 try {
-    requireAuth();
+
+    // 1. Allow GET requests only.
+    if ($_SERVER["REQUEST_METHOD"] !== "GET") {
+        header("Allow: GET");
+
+        sendJsonResponse(405, [
+            "success" => false,
+            "message" => "Only GET requests are allowed"
+        ]);
+    }
+
+    // 2. Authenticate the user.
+    $user = requireAuth();
+
+    $userId = (int) ($user["id"] ?? 0);
+    $role = strtolower(trim($user["role"] ?? ""));
+
+    if (!in_array($role, ["admin", "teacher"], true)) {
+        sendJsonResponse(403, [
+            "success" => false,
+            "message" => "Admin or Teacher permission required"
+        ]);
+    }
 
     global $conn;
 
+    // 3. Aggregate attendance once per student per date.
+    // Present takes priority if conflicting duplicate records exist.
     $sql = "
         SELECT
             s.id,
@@ -22,21 +59,68 @@ try {
             s.department,
             s.semester,
             s.photo,
-            COUNT(a.id) AS total_classes,
+
+            COUNT(a.attendance_date) AS total_classes,
+
             COALESCE(
-                SUM(CASE WHEN a.status = 'Present' THEN 1 ELSE 0 END),
+                SUM(
+                    CASE
+                        WHEN a.status = 'Present' THEN 1
+                        ELSE 0
+                    END
+                ),
                 0
             ) AS present_classes,
-            CASE
-                WHEN COUNT(a.id) = 0 THEN 0
-                ELSE ROUND(
-                    SUM(CASE WHEN a.status = 'Present' THEN 1 ELSE 0 END)
-                    * 100.0 / COUNT(a.id),
-                    2
-                )
-            END AS attendance_percentage
-        FROM students s
-        LEFT JOIN attendance a ON a.student_id = s.id
+
+            COALESCE(
+                SUM(
+                    CASE
+                        WHEN a.status = 'Absent' THEN 1
+                        ELSE 0
+                    END
+                ),
+                0
+            ) AS absent_classes
+
+        FROM students AS s
+
+        LEFT JOIN (
+            SELECT
+                student_id,
+                attendance_date,
+
+                CASE
+                    WHEN SUM(status = 'Present') > 0
+                        THEN 'Present'
+                    WHEN SUM(status = 'Absent') > 0
+                        THEN 'Absent'
+                    ELSE NULL
+                END AS status
+
+            FROM attendance
+
+            GROUP BY
+                student_id,
+                attendance_date
+        ) AS a
+            ON a.student_id = s.id
+    ";
+
+    // 4. Restrict teachers to their assigned classes/sections.
+    if ($role === "teacher") {
+        $sql .= "
+            WHERE EXISTS (
+                SELECT 1
+                FROM class_routines AS r
+                WHERE r.teacher_user_id = ?
+                  AND r.class_name = s.class_name
+                  AND r.section = s.section
+                  AND r.is_active = 1
+            )
+        ";
+    }
+
+    $sql .= "
         GROUP BY
             s.id,
             s.student_id,
@@ -47,39 +131,105 @@ try {
             s.department,
             s.semester,
             s.photo
-        HAVING attendance_percentage < 75
-        ORDER BY attendance_percentage ASC, s.name ASC
+
+        HAVING
+            COUNT(a.attendance_date) = 0
+            OR (
+                SUM(
+                    CASE
+                        WHEN a.status = 'Present' THEN 1
+                        ELSE 0
+                    END
+                ) * 100.0
+                / NULLIF(COUNT(a.attendance_date), 0)
+            ) < 75
+
+        ORDER BY
+            CASE
+                WHEN COUNT(a.attendance_date) = 0 THEN 0
+                ELSE 1
+            END ASC,
+
+            CASE
+                WHEN COUNT(a.attendance_date) = 0 THEN 0
+                ELSE (
+                    SUM(
+                        CASE
+                            WHEN a.status = 'Present' THEN 1
+                            ELSE 0
+                        END
+                    ) * 100.0
+                    / NULLIF(COUNT(a.attendance_date), 0)
+                )
+            END ASC,
+
+            s.name ASC
     ";
 
-    $result = $conn->query($sql);
+    $stmt = $conn->prepare($sql);
+
+    if ($role === "teacher") {
+        $stmt->bind_param("i", $userId);
+    }
+
+    $stmt->execute();
+
+    $result = $stmt->get_result();
+
+    // 5. Build the student list.
     $students = [];
 
     while ($row = $result->fetch_assoc()) {
-        $row["total_classes"] = (int) $row["total_classes"];
-        $row["present_classes"] = (int) $row["present_classes"];
-        $row["attendance_percentage"] =
-            (float) $row["attendance_percentage"];
 
-        $row["attendance_status"] =
-            $row["total_classes"] === 0
-                ? "No records"
-                : "Below 75%";
+        $totalClasses = (int) $row["total_classes"];
+        $presentClasses = (int) $row["present_classes"];
+        $absentClasses = (int) $row["absent_classes"];
+
+        $percentage = $totalClasses > 0
+            ? ($presentClasses / $totalClasses) * 100
+            : 0;
+
+        $row["id"] = (int) $row["id"];
+        $row["total_classes"] = $totalClasses;
+        $row["present_classes"] = $presentClasses;
+        $row["absent_classes"] = $absentClasses;
+        $row["attendance_percentage"] = round(
+            $percentage,
+            2
+        );
+
+        $row["attendance_status"] = $totalClasses === 0
+            ? "No records"
+            : "Below 75%";
 
         $students[] = $row;
     }
 
-    echo json_encode([
+    $stmt->close();
+
+    // 6. Preserve the original response fields.
+    sendJsonResponse(200, [
         "success" => true,
         "count" => count($students),
         "students" => $students
     ]);
 
 } catch (Throwable $e) {
-    http_response_code(500);
 
-    echo json_encode([
+    error_log(
+        "get_low_attendance_students.php error: " .
+        $e->getMessage()
+    );
+
+    sendJsonResponse(500, [
         "success" => false,
         "message" => "Unable to load low attendance students"
     ]);
+
+} finally {
+
+    if (isset($conn) && $conn instanceof mysqli) {
+        $conn->close();
+    }
 }
 ?>

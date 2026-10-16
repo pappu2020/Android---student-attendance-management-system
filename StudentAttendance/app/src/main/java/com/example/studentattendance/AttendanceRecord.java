@@ -2,6 +2,7 @@ package com.example.studentattendance;
 
 import android.app.DatePickerDialog;
 import android.content.Intent;
+import android.content.SharedPreferences;
 import android.graphics.Color;
 import android.graphics.Typeface;
 import android.graphics.drawable.GradientDrawable;
@@ -20,6 +21,7 @@ import android.widget.ImageView;
 import android.widget.LinearLayout;
 import android.widget.Spinner;
 import android.widget.TextView;
+import android.widget.Toast;
 
 import androidx.appcompat.app.AppCompatActivity;
 
@@ -35,9 +37,11 @@ import java.io.OutputStream;
 import java.net.HttpURLConnection;
 import java.net.URL;
 import java.net.URLEncoder;
+import java.nio.charset.StandardCharsets;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Calendar;
+import java.util.Date;
 import java.util.Locale;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -45,7 +49,7 @@ import java.util.concurrent.Executors;
 public class AttendanceRecord extends AppCompatActivity {
 
     // =========================================================
-    // API
+    // API CONFIGURATION
     // =========================================================
 
     private static final String HISTORY_URL =
@@ -54,6 +58,10 @@ public class AttendanceRecord extends AppCompatActivity {
     private static final String PHOTO_BASE_URL =
             "http://10.0.2.2/student_attendance_api/";
 
+    private static final String PREFS_NAME =
+            "StudentAttendanceAuth";
+
+    private String authToken = "";
 
     // =========================================================
     // UI
@@ -63,9 +71,7 @@ public class AttendanceRecord extends AppCompatActivity {
     private Spinner spinnerHistorySection;
 
     private TextView tvHistoryDate;
-
     private Button btnHistoryRefresh;
-
     private EditText etHistorySearch;
 
     private TextView tvHistoryTotal;
@@ -79,9 +85,8 @@ public class AttendanceRecord extends AppCompatActivity {
 
     private LinearLayout llHistoryList;
 
-
     // =========================================================
-    // DATA
+    // DATA AND THREADS
     // =========================================================
 
     private final ArrayList<JSONObject> allStudents =
@@ -89,17 +94,13 @@ public class AttendanceRecord extends AppCompatActivity {
 
     private String selectedDate = "";
 
-
-    // =========================================================
-    // THREAD
-    // =========================================================
-
     private final ExecutorService executorService =
             Executors.newSingleThreadExecutor();
 
     private final Handler mainHandler =
             new Handler(Looper.getMainLooper());
 
+    private boolean requestInProgress = false;
 
     // =========================================================
     // ON CREATE
@@ -107,133 +108,135 @@ public class AttendanceRecord extends AppCompatActivity {
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
-
         super.onCreate(savedInstanceState);
 
-        setContentView(
-                R.layout.activity_attendance_record
+        setContentView(R.layout.activity_attendance_record);
+
+        loadAuthToken();
+
+        if (authToken.isEmpty()) {
+            Toast.makeText(
+                    this,
+                    "Session expired. Please login again.",
+                    Toast.LENGTH_LONG
+            ).show();
+
+            finish();
+            return;
+        }
+
+        initializeViews();
+        setupClassSpinner();
+        setupSectionSpinner();
+        setupDate();
+        setupSearch();
+        setupRefreshButton();
+        setupTodayDate();
+        resetSummary();
+    }
+
+    // =========================================================
+    // AUTHENTICATION
+    // =========================================================
+
+    private void loadAuthToken() {
+
+        SharedPreferences preferences =
+                getSharedPreferences(
+                        PREFS_NAME,
+                        MODE_PRIVATE
+                );
+
+        authToken = preferences.getString(
+                "auth_token",
+                ""
         );
 
+        if (authToken == null) {
+            authToken = "";
+        }
 
-        // -----------------------------------------------------
-        // Find Views
-        // -----------------------------------------------------
+        authToken = authToken.trim();
+    }
+
+    private boolean hasValidLocalToken() {
+
+        if (authToken.isEmpty()) {
+            showMessage(
+                    "Session expired. Please login again."
+            );
+            return false;
+        }
+
+        return true;
+    }
+
+    // =========================================================
+    // INITIALIZE VIEWS
+    // =========================================================
+
+    private void initializeViews() {
 
         spinnerHistoryClass =
-                findViewById(
-                        R.id.spinnerHistoryClass
-                );
+                findViewById(R.id.spinnerHistoryClass);
 
         spinnerHistorySection =
-                findViewById(
-                        R.id.spinnerHistorySection
-                );
+                findViewById(R.id.spinnerHistorySection);
 
         tvHistoryDate =
-                findViewById(
-                        R.id.tvHistoryDate
-                );
+                findViewById(R.id.tvHistoryDate);
 
         btnHistoryRefresh =
-                findViewById(
-                        R.id.btnHistoryRefresh
-                );
+                findViewById(R.id.btnHistoryRefresh);
 
         etHistorySearch =
-                findViewById(
-                        R.id.etHistorySearch
-                );
+                findViewById(R.id.etHistorySearch);
 
         tvHistoryTotal =
-                findViewById(
-                        R.id.tvHistoryTotal
-                );
+                findViewById(R.id.tvHistoryTotal);
 
         tvHistoryPresent =
-                findViewById(
-                        R.id.tvHistoryPresent
-                );
+                findViewById(R.id.tvHistoryPresent);
 
         tvHistoryAbsent =
-                findViewById(
-                        R.id.tvHistoryAbsent
-                );
+                findViewById(R.id.tvHistoryAbsent);
 
         tvHistoryRate =
-                findViewById(
-                        R.id.tvHistoryRate
-                );
+                findViewById(R.id.tvHistoryRate);
 
         tvHistoryNotMarked =
-                findViewById(
-                        R.id.tvHistoryNotMarked
-                );
+                findViewById(R.id.tvHistoryNotMarked);
 
         tvHistoryResultCount =
-                findViewById(
-                        R.id.tvHistoryResultCount
-                );
+                findViewById(R.id.tvHistoryResultCount);
 
         tvHistoryMessage =
-                findViewById(
-                        R.id.tvHistoryMessage
-                );
+                findViewById(R.id.tvHistoryMessage);
 
         llHistoryList =
-                findViewById(
-                        R.id.llHistoryList
-                );
+                findViewById(R.id.llHistoryList);
+    }
 
+    // =========================================================
+    // TODAY'S DATE
+    // =========================================================
 
-        // -----------------------------------------------------
-        // Setup
-        // -----------------------------------------------------
+    private void setupTodayDate() {
 
-        setupClassSpinner();
+        Calendar calendar = Calendar.getInstance();
 
-        setupSectionSpinner();
-
-        setupDate();
-
-        setupSearch();
-
-        setupRefreshButton();
-
-
-        // -----------------------------------------------------
-        // Set Today's Date
-        // -----------------------------------------------------
-
-        Calendar calendar =
-                Calendar.getInstance();
-
-
-        selectedDate =
-                new SimpleDateFormat(
-                        "yyyy-MM-dd",
-                        Locale.getDefault()
-                ).format(
-                        calendar.getTime()
-                );
-
+        selectedDate = new SimpleDateFormat(
+                "yyyy-MM-dd",
+                Locale.US
+        ).format(calendar.getTime());
 
         tvHistoryDate.setText(
                 new SimpleDateFormat(
                         "dd MMM yyyy",
                         Locale.getDefault()
-                ).format(
-                        calendar.getTime()
-                )
+                ).format(calendar.getTime())
         );
-
-
-        // -----------------------------------------------------
-        // Reset Summary
-        // -----------------------------------------------------
-
-        resetSummary();
     }
-
 
     // =========================================================
     // REFRESH BUTTON
@@ -241,52 +244,26 @@ public class AttendanceRecord extends AppCompatActivity {
 
     private void setupRefreshButton() {
 
-        btnHistoryRefresh.setOnClickListener(
-                view -> {
+        btnHistoryRefresh.setOnClickListener(view -> {
 
-                    if (
-                            spinnerHistoryClass
-                                    .getSelectedItemPosition()
-                                    == 0
-                    ) {
+            if (spinnerHistoryClass.getSelectedItemPosition() == 0) {
+                showMessage("Please select a class first.");
+                return;
+            }
 
-                        showMessage(
-                                "Please select a class first."
-                        );
+            if (spinnerHistorySection.getSelectedItemPosition() == 0) {
+                showMessage("Please select a section first.");
+                return;
+            }
 
-                        return;
-                    }
+            if (selectedDate.isEmpty()) {
+                showMessage("Please select an attendance date.");
+                return;
+            }
 
-
-                    if (
-                            spinnerHistorySection
-                                    .getSelectedItemPosition()
-                                    == 0
-                    ) {
-
-                        showMessage(
-                                "Please select a section first."
-                        );
-
-                        return;
-                    }
-
-
-                    if (selectedDate.isEmpty()) {
-
-                        showMessage(
-                                "Please select an attendance date."
-                        );
-
-                        return;
-                    }
-
-
-                    loadAttendanceHistory();
-                }
-        );
+            loadAttendanceHistory();
+        });
     }
-
 
     // =========================================================
     // CLASS SPINNER
@@ -294,40 +271,24 @@ public class AttendanceRecord extends AppCompatActivity {
 
     private void setupClassSpinner() {
 
-        ArrayList<String> classes =
-                new ArrayList<>();
-
-
-        classes.add(
-                "Select Class"
-        );
-
+        ArrayList<String> classes = new ArrayList<>();
+        classes.add("Select Class");
 
         for (int i = 6; i <= 12; i++) {
-
-            classes.add(
-                    "Class " + i
-            );
+            classes.add("Class " + i);
         }
 
-
-        ArrayAdapter<String> adapter =
-                new ArrayAdapter<>(
-                        this,
-                        android.R.layout.simple_spinner_item,
-                        classes
-                );
-
+        ArrayAdapter<String> adapter = new ArrayAdapter<>(
+                this,
+                android.R.layout.simple_spinner_item,
+                classes
+        );
 
         adapter.setDropDownViewResource(
                 android.R.layout.simple_spinner_dropdown_item
         );
 
-
-        spinnerHistoryClass.setAdapter(
-                adapter
-        );
-
+        spinnerHistoryClass.setAdapter(adapter);
 
         spinnerHistoryClass.setOnItemSelectedListener(
                 new AdapterView.OnItemSelectedListener() {
@@ -337,23 +298,25 @@ public class AttendanceRecord extends AppCompatActivity {
                             AdapterView<?> parent,
                             View view,
                             int position,
-                            long id) {
-
-                        if (position > 0) {
+                            long id
+                    ) {
+                        if (position > 0
+                                && spinnerHistorySection
+                                .getSelectedItemPosition() > 0
+                                && !selectedDate.isEmpty()) {
 
                             loadAttendanceHistory();
                         }
                     }
 
-
                     @Override
                     public void onNothingSelected(
-                            AdapterView<?> parent) {
+                            AdapterView<?> parent
+                    ) {
                     }
                 }
         );
     }
-
 
     // =========================================================
     // SECTION SPINNER
@@ -361,48 +324,25 @@ public class AttendanceRecord extends AppCompatActivity {
 
     private void setupSectionSpinner() {
 
-        ArrayList<String> sections =
-                new ArrayList<>();
+        ArrayList<String> sections = new ArrayList<>();
 
+        sections.add("Select Section");
+        sections.add("Section A");
+        sections.add("Section B");
+        sections.add("Section C");
+        sections.add("Section D");
 
-        sections.add(
-                "Select Section"
+        ArrayAdapter<String> adapter = new ArrayAdapter<>(
+                this,
+                android.R.layout.simple_spinner_item,
+                sections
         );
-
-        sections.add(
-                "Section A"
-        );
-
-        sections.add(
-                "Section B"
-        );
-
-        sections.add(
-                "Section C"
-        );
-
-        sections.add(
-                "Section D"
-        );
-
-
-        ArrayAdapter<String> adapter =
-                new ArrayAdapter<>(
-                        this,
-                        android.R.layout.simple_spinner_item,
-                        sections
-                );
-
 
         adapter.setDropDownViewResource(
                 android.R.layout.simple_spinner_dropdown_item
         );
 
-
-        spinnerHistorySection.setAdapter(
-                adapter
-        );
-
+        spinnerHistorySection.setAdapter(adapter);
 
         spinnerHistorySection.setOnItemSelectedListener(
                 new AdapterView.OnItemSelectedListener() {
@@ -412,26 +352,28 @@ public class AttendanceRecord extends AppCompatActivity {
                             AdapterView<?> parent,
                             View view,
                             int position,
-                            long id) {
-
-                        if (position > 0) {
+                            long id
+                    ) {
+                        if (position > 0
+                                && spinnerHistoryClass
+                                .getSelectedItemPosition() > 0
+                                && !selectedDate.isEmpty()) {
 
                             loadAttendanceHistory();
                         }
                     }
 
-
                     @Override
                     public void onNothingSelected(
-                            AdapterView<?> parent) {
+                            AdapterView<?> parent
+                    ) {
                     }
                 }
         );
     }
 
-
     // =========================================================
-    // DATE SETUP
+    // DATE PICKER
     // =========================================================
 
     private void setupDate() {
@@ -441,78 +383,68 @@ public class AttendanceRecord extends AppCompatActivity {
         );
     }
 
-
-    // =========================================================
-    // DATE PICKER
-    // =========================================================
-
     private void showDatePicker() {
 
-        Calendar calendar =
-                Calendar.getInstance();
+        Calendar calendar = Calendar.getInstance();
 
+        try {
+            Date parsed = new SimpleDateFormat(
+                    "yyyy-MM-dd",
+                    Locale.US
+            ).parse(selectedDate);
 
-        DatePickerDialog dialog =
-                new DatePickerDialog(
+            if (parsed != null) {
+                calendar.setTime(parsed);
+            }
+        } catch (Exception ignored) {
+        }
 
-                        AttendanceRecord.this,
+        DatePickerDialog dialog = new DatePickerDialog(
+                AttendanceRecord.this,
+                (datePicker, year, month, day) -> {
 
-                        (datePicker, year, month, day) -> {
+                    Calendar selectedCalendar =
+                            Calendar.getInstance();
 
-                            Calendar selectedCalendar =
-                                    Calendar.getInstance();
+                    selectedCalendar.set(
+                            year,
+                            month,
+                            day,
+                            0,
+                            0,
+                            0
+                    );
 
+                    selectedCalendar.set(
+                            Calendar.MILLISECOND,
+                            0
+                    );
 
-                            selectedCalendar.set(
-                                    year,
-                                    month,
-                                    day
-                            );
+                    selectedDate = new SimpleDateFormat(
+                            "yyyy-MM-dd",
+                            Locale.US
+                    ).format(selectedCalendar.getTime());
 
+                    tvHistoryDate.setText(
+                            new SimpleDateFormat(
+                                    "dd MMM yyyy",
+                                    Locale.getDefault()
+                            ).format(selectedCalendar.getTime())
+                    );
 
-                            selectedDate =
-                                    new SimpleDateFormat(
-                                            "yyyy-MM-dd",
-                                            Locale.getDefault()
-                                    ).format(
-                                            selectedCalendar.getTime()
-                                    );
+                    loadAttendanceHistory();
+                },
+                calendar.get(Calendar.YEAR),
+                calendar.get(Calendar.MONTH),
+                calendar.get(Calendar.DAY_OF_MONTH)
+        );
 
-
-                            String displayDate =
-                                    new SimpleDateFormat(
-                                            "dd MMM yyyy",
-                                            Locale.getDefault()
-                                    ).format(
-                                            selectedCalendar.getTime()
-                                    );
-
-
-                            tvHistoryDate.setText(
-                                    displayDate
-                            );
-
-
-                            loadAttendanceHistory();
-                        },
-
-                        calendar.get(
-                                Calendar.YEAR
-                        ),
-
-                        calendar.get(
-                                Calendar.MONTH
-                        ),
-
-                        calendar.get(
-                                Calendar.DAY_OF_MONTH
-                        )
-                );
-
+        dialog.getDatePicker().setMaxDate(
+                System.currentTimeMillis()
+        );
 
         dialog.show();
     }
-
 
     // =========================================================
     // SEARCH
@@ -528,450 +460,301 @@ public class AttendanceRecord extends AppCompatActivity {
                             CharSequence s,
                             int start,
                             int count,
-                            int after) {
+                            int after
+                    ) {
                     }
-
 
                     @Override
                     public void onTextChanged(
                             CharSequence s,
                             int start,
                             int before,
-                            int count) {
-
-                        filterStudents(
-                                s.toString()
-                        );
+                            int count
+                    ) {
+                        filterStudents(s.toString());
                     }
 
-
                     @Override
-                    public void afterTextChanged(
-                            Editable s) {
+                    public void afterTextChanged(Editable s) {
                     }
                 }
         );
     }
 
-
     // =========================================================
-    // LOAD HISTORY
+    // LOAD ATTENDANCE HISTORY
     // =========================================================
 
     private void loadAttendanceHistory() {
 
-        if (
-                spinnerHistoryClass
-                        .getSelectedItemPosition()
-                        == 0
-        ) {
-
+        if (!hasValidLocalToken()) {
             return;
         }
 
-
-        if (
-                spinnerHistorySection
-                        .getSelectedItemPosition()
-                        == 0
-        ) {
-
+        if (spinnerHistoryClass.getSelectedItemPosition() == 0
+                || spinnerHistorySection.getSelectedItemPosition() == 0
+                || selectedDate.isEmpty()) {
             return;
         }
 
-
-        if (selectedDate.isEmpty()) {
-
+        if (requestInProgress) {
             return;
         }
-
 
         String className =
-                spinnerHistoryClass
-                        .getSelectedItem()
-                        .toString();
-
+                spinnerHistoryClass.getSelectedItem().toString();
 
         String section =
-                spinnerHistorySection
-                        .getSelectedItem()
-                        .toString();
+                spinnerHistorySection.getSelectedItem().toString();
 
+        final String requestDate = selectedDate;
 
-        tvHistoryMessage.setText(
-                "Loading attendance..."
-        );
+        requestInProgress = true;
 
+        btnHistoryRefresh.setEnabled(false);
 
-        btnHistoryRefresh.setEnabled(
-                false
-        );
-
+        tvHistoryMessage.setVisibility(View.VISIBLE);
+        tvHistoryMessage.setText("Loading attendance...");
 
         executorService.execute(() -> {
 
-            String response =
-                    sendPostRequest(
-                            className,
-                            section,
-                            selectedDate
-                    );
-
-
-            mainHandler.post(
-                    () -> {
-
-                        btnHistoryRefresh.setEnabled(
-                                true
-                        );
-
-                        handleResponse(
-                                response
-                        );
-                    }
+            String response = sendPostRequest(
+                    className,
+                    section,
+                    requestDate
             );
+
+            mainHandler.post(() -> {
+
+                requestInProgress = false;
+
+                if (isFinishing() || isDestroyed()) {
+                    return;
+                }
+
+                btnHistoryRefresh.setEnabled(true);
+
+                handleResponse(response);
+            });
         });
     }
 
-
     // =========================================================
-    // POST REQUEST
+    // POST REQUEST WITH BEARER TOKEN
     // =========================================================
 
     private String sendPostRequest(
             String className,
             String section,
-            String date) {
+            String date
+    ) {
 
         HttpURLConnection connection = null;
 
-
         try {
-
-            URL url =
-                    new URL(
-                            HISTORY_URL
-                    );
-
+            URL url = new URL(HISTORY_URL);
 
             connection =
-                    (HttpURLConnection)
-                            url.openConnection();
+                    (HttpURLConnection) url.openConnection();
 
+            connection.setRequestMethod("POST");
+            connection.setDoOutput(true);
+            connection.setConnectTimeout(15000);
+            connection.setReadTimeout(15000);
 
-            connection.setRequestMethod(
-                    "POST"
+            connection.setRequestProperty(
+                    "Content-Type",
+                    "application/x-www-form-urlencoded; charset=UTF-8"
             );
 
-
-            connection.setDoOutput(
-                    true
+            connection.setRequestProperty(
+                    "Accept",
+                    "application/json"
             );
 
-
-            connection.setConnectTimeout(
-                    10000
+            // Authentication required by auth.php.
+            connection.setRequestProperty(
+                    "Authorization",
+                    "Bearer " + authToken
             );
-
-
-            connection.setReadTimeout(
-                    10000
-            );
-
 
             String postData =
-                    "class_name="
-                            +
-                            URLEncoder.encode(
-                                    className,
-                                    "UTF-8"
-                            )
-
-                            +
-                            "&section="
-                            +
-                            URLEncoder.encode(
-                                    section,
-                                    "UTF-8"
-                            )
-
-                            +
-                            "&attendance_date="
-                            +
-                            URLEncoder.encode(
-                                    date,
-                                    "UTF-8"
-                            );
-
-
-            OutputStream outputStream =
-                    connection.getOutputStream();
-
-
-            outputStream.write(
-                    postData.getBytes(
+                    "class_name=" + URLEncoder.encode(
+                            className,
                             "UTF-8"
                     )
-            );
+                            + "&section=" + URLEncoder.encode(
+                            section,
+                            "UTF-8"
+                    )
+                            + "&attendance_date=" + URLEncoder.encode(
+                            date,
+                            "UTF-8"
+                    );
 
+            try (OutputStream outputStream =
+                         connection.getOutputStream()) {
 
-            outputStream.flush();
+                outputStream.write(
+                        postData.getBytes(StandardCharsets.UTF_8)
+                );
 
-            outputStream.close();
-
+                outputStream.flush();
+            }
 
             int responseCode =
                     connection.getResponseCode();
 
-
-            InputStream inputStream;
-
-
-            if (
-                    responseCode >= 200
-                            &&
-                            responseCode < 300
-            ) {
-
-                inputStream =
-                        connection.getInputStream();
-
-            } else {
-
-                inputStream =
-                        connection.getErrorStream();
-            }
-
+            InputStream inputStream =
+                    responseCode >= 200 && responseCode < 300
+                            ? connection.getInputStream()
+                            : connection.getErrorStream();
 
             if (inputStream == null) {
-
-                return "ERROR:Empty server response";
+                return "ERROR: HTTP " + responseCode
+                        + ": Empty server response";
             }
 
+            StringBuilder response = new StringBuilder();
 
-            BufferedReader reader =
-                    new BufferedReader(
-                            new InputStreamReader(
-                                    inputStream
-                            )
-                    );
+            try (BufferedReader reader =
+                         new BufferedReader(
+                                 new InputStreamReader(
+                                         inputStream,
+                                         StandardCharsets.UTF_8
+                                 )
+                         )) {
 
+                String line;
 
-            StringBuilder response =
-                    new StringBuilder();
-
-
-            String line;
-
-
-            while (
-                    (line = reader.readLine())
-                            != null
-            ) {
-
-                response.append(
-                        line
-                );
+                while ((line = reader.readLine()) != null) {
+                    response.append(line);
+                }
             }
 
+            android.util.Log.d(
+                    "AttendanceRecord",
+                    "HTTP status: " + responseCode
+            );
 
-            reader.close();
+            android.util.Log.d(
+                    "AttendanceRecord",
+                    "Response: " + response
+            );
 
+            if (responseCode == HttpURLConnection.HTTP_UNAUTHORIZED) {
+                return "ERROR: HTTP 401: Authentication required. "
+                        + response;
+            }
+
+            if (responseCode == HttpURLConnection.HTTP_FORBIDDEN) {
+                return "ERROR: HTTP 403: Permission denied. "
+                        + response;
+            }
+
+            if (responseCode < 200 || responseCode >= 300) {
+                return "ERROR: HTTP " + responseCode
+                        + ": " + response;
+            }
 
             return response.toString();
 
-
         } catch (Exception e) {
 
-            return "ERROR:"
-                    +
-                    e.getMessage();
+            android.util.Log.e(
+                    "AttendanceRecord",
+                    "Attendance history request failed",
+                    e
+            );
+
+            return "ERROR: " + e.getMessage();
 
         } finally {
 
             if (connection != null) {
-
                 connection.disconnect();
             }
         }
     }
 
-
     // =========================================================
-    // HANDLE RESPONSE
+    // HANDLE API RESPONSE
     // =========================================================
 
-    private void handleResponse(
-            String response) {
+    private void handleResponse(String response) {
 
-        if (
-                response == null
-                        ||
-                        response.trim().isEmpty()
-        ) {
-
-            showMessage(
-                    "No response from server."
-            );
-
+        if (response == null || response.trim().isEmpty()) {
+            showMessage("No response from server.");
             return;
         }
 
-
-        if (
-                response.startsWith(
-                        "ERROR:"
-                )
-        ) {
-
-            showMessage(
-                    "Network error: "
-                            +
-                            response.substring(
-                                    6
-                            )
-            );
-
+        if (response.startsWith("ERROR:")) {
+            showMessage(response.substring(6).trim());
             return;
         }
-
 
         try {
+            JSONObject json = new JSONObject(response);
 
-            JSONObject json =
-                    new JSONObject(
-                            response
-                    );
-
-
-            boolean success =
-                    json.optBoolean(
-                            "success",
-                            false
-                    );
-
-
-            if (!success) {
-
+            if (!json.optBoolean("success", false)) {
                 showMessage(
                         json.optString(
                                 "message",
                                 "Failed to load attendance."
                         )
                 );
-
                 return;
             }
 
-
-            // -------------------------------------------------
-            // Clear Old Data
-            // -------------------------------------------------
-
             allStudents.clear();
 
-
             JSONArray students =
-                    json.optJSONArray(
-                            "students"
-                    );
-
+                    json.optJSONArray("students");
 
             if (students != null) {
+                for (int i = 0; i < students.length(); i++) {
+                    JSONObject student =
+                            students.optJSONObject(i);
 
-                for (
-                        int i = 0;
-                        i < students.length();
-                        i++
-                ) {
-
-                    allStudents.add(
-                            students.getJSONObject(
-                                    i
-                            )
-                    );
+                    if (student != null) {
+                        allStudents.add(student);
+                    }
                 }
             }
 
-
-            // -------------------------------------------------
-            // Summary
-            // -------------------------------------------------
-
             int total =
-                    json.optInt(
-                            "total_students",
-                            0
-                    );
-
+                    json.optInt("total_students", 0);
 
             int present =
-                    json.optInt(
-                            "present_count",
-                            0
-                    );
-
+                    json.optInt("present_count", 0);
 
             int absent =
-                    json.optInt(
-                            "absent_count",
-                            0
-                    );
-
+                    json.optInt("absent_count", 0);
 
             int notMarked =
-                    json.optInt(
-                            "not_marked_count",
-                            0
-                    );
+                    json.optInt("not_marked_count", 0);
 
+            int markedStudents = present + absent;
 
-            int markedStudents =
-                    present + absent;
-
-
-            double attendanceRate =
-                    0;
-
-
-            if (markedStudents > 0) {
-
-                attendanceRate =
-                        (
-                                present * 100.0
-                        )
-                                /
-                                markedStudents;
-            }
-
+            double attendanceRate = markedStudents > 0
+                    ? present * 100.0 / markedStudents
+                    : 0.0;
 
             tvHistoryTotal.setText(
-                    String.valueOf(
-                            total
-                    )
+                    String.valueOf(total)
             );
-
 
             tvHistoryPresent.setText(
-                    String.valueOf(
-                            present
-                    )
+                    String.valueOf(present)
             );
-
 
             tvHistoryAbsent.setText(
-                    String.valueOf(
-                            absent
-                    )
+                    String.valueOf(absent)
             );
-
 
             tvHistoryNotMarked.setText(
-                    "Not Marked: "
-                            +
-                            notMarked
+                    "Not Marked: " + notMarked
             );
-
 
             tvHistoryRate.setText(
                     String.format(
@@ -981,176 +764,89 @@ public class AttendanceRecord extends AppCompatActivity {
                     )
             );
 
-
-            tvHistoryMessage.setText(
-                    ""
-            );
-
-
-            // -------------------------------------------------
-            // Display Students
-            // -------------------------------------------------
+            tvHistoryMessage.setText("");
 
             filterStudents(
-                    etHistorySearch
-                            .getText()
-                            .toString()
+                    etHistorySearch.getText().toString()
             );
-
 
         } catch (Exception e) {
 
-            showMessage(
-                    "Invalid server response."
+            android.util.Log.e(
+                    "AttendanceRecord",
+                    "Invalid attendance response",
+                    e
             );
+
+            showMessage("Invalid server response.");
         }
     }
-
 
     // =========================================================
     // FILTER STUDENTS
     // =========================================================
 
-    private void filterStudents(
-            String searchText) {
+    private void filterStudents(String searchText) {
 
         llHistoryList.removeAllViews();
 
+        String query = searchText == null
+                ? ""
+                : searchText.trim().toLowerCase(Locale.getDefault());
 
-        String query =
-                searchText
-                        .trim()
-                        .toLowerCase(
-                                Locale.getDefault()
-                        );
+        int matchedCount = 0;
 
+        for (JSONObject student : allStudents) {
 
-        int matchedCount =
-                0;
+            String name = student.optString("name", "");
+            String roll = student.optString("roll_number", "");
 
-
-        for (
-                JSONObject student :
-                allStudents
-        ) {
-
-            String name =
-                    student.optString(
-                            "name",
-                            ""
-                    );
-
-
-            String roll =
-                    student.optString(
-                            "roll_number",
-                            ""
-                    );
-
-
-            boolean matches;
-
-
-            if (query.isEmpty()) {
-
-                matches = true;
-
-            } else {
-
-                matches =
-                        name.toLowerCase(
-                                Locale.getDefault()
-                        ).contains(
-                                query
-                        )
-
-                                ||
-
-                                roll.toLowerCase(
-                                        Locale.getDefault()
-                                ).contains(
-                                        query
-                                );
-            }
-
+            boolean matches = query.isEmpty()
+                    || name.toLowerCase(Locale.getDefault())
+                    .contains(query)
+                    || roll.toLowerCase(Locale.getDefault())
+                    .contains(query);
 
             if (matches) {
-
-                addStudentCard(
-                        student
-                );
-
+                addStudentCard(student);
                 matchedCount++;
             }
         }
 
-
         tvHistoryResultCount.setText(
-                "Showing "
-                        +
-                        matchedCount
-                        +
-                        " of "
-                        +
-                        allStudents.size()
-                        +
-                        " students"
+                "Showing " + matchedCount
+                        + " of " + allStudents.size()
+                        + " students"
         );
-
 
         if (matchedCount == 0) {
 
-            if (allStudents.isEmpty()) {
+            tvHistoryMessage.setVisibility(View.VISIBLE);
 
+            if (allStudents.isEmpty()) {
                 tvHistoryMessage.setText(
                         "No students found for the selected class, section and date."
                 );
-
             } else {
-
                 tvHistoryMessage.setText(
                         "No student matches your search."
                 );
             }
 
         } else {
-
-            tvHistoryMessage.setText(
-                    ""
-            );
+            tvHistoryMessage.setVisibility(View.GONE);
         }
     }
 
-
     // =========================================================
-    // CREATE STUDENT CARD
+    // STUDENT CARD
     // =========================================================
 
-    private void addStudentCard(
-            JSONObject student) {
+    private void addStudentCard(JSONObject student) {
 
-        // -----------------------------------------------------
-        // Main Card
-        // -----------------------------------------------------
-
-        LinearLayout card =
-                new LinearLayout(
-                        this
-                );
-
-
-        card.setOrientation(
-                LinearLayout.VERTICAL
-        );
-
-
-        card.setPadding(
-                16,
-                16,
-                16,
-                16
-        );
-
+        LinearLayout card = new LinearLayout(this);
+        card.setOrientation(LinearLayout.VERTICAL);
+        card.setPadding(dp(16), dp(16), dp(16), dp(16));
 
         LinearLayout.LayoutParams cardParams =
                 new LinearLayout.LayoutParams(
@@ -1158,440 +854,151 @@ public class AttendanceRecord extends AppCompatActivity {
                         LinearLayout.LayoutParams.WRAP_CONTENT
                 );
 
-
-        cardParams.setMargins(
-                0,
-                0,
-                0,
-                12
-        );
-
-
-        card.setLayoutParams(
-                cardParams
-        );
-
+        cardParams.setMargins(0, 0, 0, dp(12));
+        card.setLayoutParams(cardParams);
 
         GradientDrawable cardBackground =
                 new GradientDrawable();
 
-
-        cardBackground.setColor(
-                Color.WHITE
-        );
-
-
-        cardBackground.setCornerRadius(
-                22
-        );
-
-
+        cardBackground.setColor(Color.WHITE);
+        cardBackground.setCornerRadius(dp(22));
         cardBackground.setStroke(
-                1,
-                Color.rgb(
-                        230,
-                        235,
-                        240
-                )
+                dp(1),
+                Color.rgb(230, 235, 240)
         );
 
+        card.setBackground(cardBackground);
+        card.setClickable(true);
+        card.setFocusable(true);
 
-        card.setBackground(
-                cardBackground
-        );
+        card.setOnClickListener(view -> {
 
+            int studentId = student.optInt("id", 0);
 
-        // -----------------------------------------------------
-        // Clickable Student Card
-        // -----------------------------------------------------
+            if (studentId <= 0) {
+                return;
+            }
 
-        card.setClickable(
-                true
-        );
+            Intent intent = new Intent(
+                    AttendanceRecord.this,
+                    StudentAttendanceDetailsActivity.class
+            );
 
+            intent.putExtra("student_id", studentId);
+            startActivity(intent);
+        });
 
-        card.setFocusable(
-                true
-        );
+        LinearLayout topRow = new LinearLayout(this);
+        topRow.setOrientation(LinearLayout.HORIZONTAL);
+        topRow.setGravity(Gravity.CENTER_VERTICAL);
 
-
-        card.setOnClickListener(
-                view -> {
-
-                    int studentId =
-                            student.optInt(
-                                    "id",
-                                    0
-                            );
-
-
-                    if (studentId <= 0) {
-
-                        return;
-                    }
-
-
-                    Intent intent =
-                            new Intent(
-                                    AttendanceRecord.this,
-                                    StudentAttendanceDetailsActivity.class
-                            );
-
-
-                    intent.putExtra(
-                            "student_id",
-                            studentId
-                    );
-
-
-                    startActivity(
-                            intent
-                    );
-                }
-        );
-
-
-        // -----------------------------------------------------
-        // TOP ROW
-        // -----------------------------------------------------
-
-        LinearLayout topRow =
-                new LinearLayout(
-                        this
-                );
-
-
-        topRow.setOrientation(
-                LinearLayout.HORIZONTAL
-        );
-
-
-        topRow.setGravity(
-                Gravity.CENTER_VERTICAL
-        );
-
-
-        // -----------------------------------------------------
-        // STUDENT PHOTO
-        // -----------------------------------------------------
-
-        ImageView imageView =
-                new ImageView(
-                        this
-                );
-
+        ImageView imageView = new ImageView(this);
 
         LinearLayout.LayoutParams imageParams =
                 new LinearLayout.LayoutParams(
-                        64,
-                        64
+                        dp(64),
+                        dp(64)
                 );
 
-
-        imageParams.setMargins(
-                0,
-                0,
-                14,
-                0
-        );
-
-
-        imageView.setLayoutParams(
-                imageParams
-        );
-
-
-        imageView.setScaleType(
-                ImageView.ScaleType.CENTER_CROP
-        );
-
+        imageParams.setMargins(0, 0, dp(14), 0);
+        imageView.setLayoutParams(imageParams);
+        imageView.setScaleType(ImageView.ScaleType.CENTER_CROP);
 
         GradientDrawable imageBackground =
                 new GradientDrawable();
 
+        imageBackground.setColor(Color.rgb(227, 242, 253));
+        imageBackground.setShape(GradientDrawable.OVAL);
 
-        imageBackground.setColor(
-                Color.rgb(
-                        227,
-                        242,
-                        253
-                )
-        );
+        imageView.setBackground(imageBackground);
 
+        LinearLayout infoLayout = new LinearLayout(this);
+        infoLayout.setOrientation(LinearLayout.VERTICAL);
 
-        imageBackground.setShape(
-                GradientDrawable.OVAL
-        );
-
-
-        imageView.setBackground(
-                imageBackground
-        );
-
-
-        // -----------------------------------------------------
-        // INFORMATION LAYOUT
-        // -----------------------------------------------------
-
-        LinearLayout infoLayout =
-                new LinearLayout(
-                        this
-                );
-
-
-        infoLayout.setOrientation(
-                LinearLayout.VERTICAL
-        );
-
-
-        LinearLayout.LayoutParams infoParams =
+        infoLayout.setLayoutParams(
                 new LinearLayout.LayoutParams(
                         0,
                         LinearLayout.LayoutParams.WRAP_CONTENT,
                         1
-                );
-
-
-        infoLayout.setLayoutParams(
-                infoParams
+                )
         );
 
-
-        // -----------------------------------------------------
-        // NAME
-        // -----------------------------------------------------
-
-        TextView nameView =
-                new TextView(
-                        this
-                );
-
-
+        TextView nameView = new TextView(this);
         nameView.setText(
-                student.optString(
-                        "name",
-                        "Unknown Student"
-                )
+                student.optString("name", "Unknown Student")
         );
+        nameView.setTextColor(Color.rgb(38, 50, 56));
+        nameView.setTextSize(18);
+        nameView.setTypeface(null, Typeface.BOLD);
 
-
-        nameView.setTextColor(
-                Color.rgb(
-                        38,
-                        50,
-                        56
-                )
-        );
-
-
-        nameView.setTextSize(
-                18
-        );
-
-
-        nameView.setTypeface(
-                null,
-                Typeface.BOLD
-        );
-
+        infoLayout.addView(nameView);
 
         infoLayout.addView(
-                nameView
-        );
-
-
-        // -----------------------------------------------------
-        // ROLL
-        // -----------------------------------------------------
-
-        TextView rollView =
                 createInfoText(
                         "Roll No: "
-                                +
-                                student.optString(
-                                        "roll_number",
-                                        "-"
-                                )
-                );
-
-
-        infoLayout.addView(
-                rollView
+                                + student.optString("roll_number", "-")
+                )
         );
 
-
-        // -----------------------------------------------------
-        // CLASS + SECTION
-        // -----------------------------------------------------
-
-        TextView classView =
+        infoLayout.addView(
                 createInfoText(
-                        student.optString(
-                                "class_name",
-                                "-"
-                        )
-                                +
-                                " • "
-                                +
-                                student.optString(
-                                        "section",
-                                        "-"
-                                )
-                );
-
-
-        infoLayout.addView(
-                classView
+                        student.optString("class_name", "-")
+                                + " • "
+                                + student.optString("section", "-")
+                )
         );
 
+        String attendanceDate = student.optString(
+                "attendance_date",
+                selectedDate
+        );
 
-        // -----------------------------------------------------
-        // DATE
-        // -----------------------------------------------------
-
-        String attendanceDate =
-                student.optString(
-                        "attendance_date",
-                        selectedDate
-                );
-
-
-        TextView dateView =
+        infoLayout.addView(
                 createInfoText(
-                        "Date: "
-                                +
-                                formatAttendanceDate(
-                                        attendanceDate
-                                )
-                );
-
-
-        infoLayout.addView(
-                dateView
+                        "Date: " + formatAttendanceDate(attendanceDate)
+                )
         );
 
+        topRow.addView(imageView);
+        topRow.addView(infoLayout);
+        card.addView(topRow);
 
-        // -----------------------------------------------------
-        // Add Photo + Info
-        // -----------------------------------------------------
+        String photo = student.optString("photo", "");
 
-        topRow.addView(
-                imageView
-        );
+        if (!photo.trim().isEmpty()
+                && !"null".equalsIgnoreCase(photo.trim())) {
 
+            String photoUrl = PHOTO_BASE_URL + photo;
 
-        topRow.addView(
-                infoLayout
-        );
-
-
-        card.addView(
-                topRow
-        );
-
-
-        // -----------------------------------------------------
-        // LOAD PHOTO
-        // -----------------------------------------------------
-
-        String photo =
-                student.optString(
-                        "photo",
-                        ""
-                );
-
-
-        if (
-                photo != null
-                        &&
-                        !photo.trim().isEmpty()
-                        &&
-                        !photo.equalsIgnoreCase(
-                                "null"
-                        )
-        ) {
-
-            String photoUrl =
-                    PHOTO_BASE_URL
-                            +
-                            photo;
-
-
-            Glide.with(
-                            AttendanceRecord.this
-                    )
-                    .load(
-                            photoUrl
-                    )
-                    .placeholder(
-                            android.R.drawable
-                                    .ic_menu_gallery
-                    )
-                    .error(
-                            android.R.drawable
-                                    .ic_menu_gallery
-                    )
+            Glide.with(this)
+                    .load(photoUrl)
+                    .placeholder(android.R.drawable.ic_menu_gallery)
+                    .error(android.R.drawable.ic_menu_gallery)
                     .circleCrop()
-                    .into(
-                            imageView
-                    );
+                    .into(imageView);
 
         } else {
-
             imageView.setImageResource(
-                    android.R.drawable
-                            .ic_menu_myplaces
+                    android.R.drawable.ic_menu_myplaces
             );
         }
 
-
-        // -----------------------------------------------------
-        // STATUS
-        // -----------------------------------------------------
-
-        String status =
-                student.optString(
-                        "status",
-                        "Not Marked"
-                );
-
-
-        TextView statusView =
-                new TextView(
-                        this
-                );
-
-
-        statusView.setText(
-                getStatusText(
-                        status
-                )
+        String status = student.optString(
+                "status",
+                "Not Marked"
         );
 
-
-        statusView.setTextSize(
-                14
-        );
-
-
-        statusView.setTypeface(
-                null,
-                Typeface.BOLD
-        );
-
-
-        statusView.setGravity(
-                Gravity.CENTER
-        );
-
-
+        TextView statusView = new TextView(this);
+        statusView.setText(getStatusText(status));
+        statusView.setTextSize(14);
+        statusView.setTypeface(null, Typeface.BOLD);
+        statusView.setGravity(Gravity.CENTER);
         statusView.setPadding(
-                12,
-                11,
-                12,
-                11
+                dp(12),
+                dp(11),
+                dp(12),
+                dp(11)
         );
-
 
         LinearLayout.LayoutParams statusParams =
                 new LinearLayout.LayoutParams(
@@ -1599,191 +1006,79 @@ public class AttendanceRecord extends AppCompatActivity {
                         LinearLayout.LayoutParams.WRAP_CONTENT
                 );
 
-
-        statusParams.setMargins(
-                0,
-                14,
-                0,
-                0
-        );
-
-
-        statusView.setLayoutParams(
-                statusParams
-        );
-
+        statusParams.setMargins(0, dp(14), 0, 0);
+        statusView.setLayoutParams(statusParams);
 
         GradientDrawable statusBackground =
                 new GradientDrawable();
 
+        statusBackground.setCornerRadius(dp(14));
 
-        statusBackground.setCornerRadius(
-                14
-        );
-
-
-        // -----------------------------------------------------
-        // PRESENT
-        // -----------------------------------------------------
-
-        if (
-                status.equalsIgnoreCase(
-                        "Present"
-                )
-        ) {
+        if ("Present".equalsIgnoreCase(status)) {
 
             statusBackground.setColor(
-                    Color.rgb(
-                            232,
-                            245,
-                            233
-                    )
+                    Color.rgb(232, 245, 233)
             );
 
+            statusView.setTextColor(
+                    Color.rgb(46, 125, 50)
+            );
+
+        } else if ("Absent".equalsIgnoreCase(status)) {
+
+            statusBackground.setColor(
+                    Color.rgb(255, 235, 238)
+            );
 
             statusView.setTextColor(
-                    Color.rgb(
-                            46,
-                            125,
-                            50
-                    )
+                    Color.rgb(198, 40, 40)
+            );
+
+        } else {
+
+            statusBackground.setColor(
+                    Color.rgb(245, 245, 245)
+            );
+
+            statusView.setTextColor(
+                    Color.rgb(84, 110, 122)
             );
         }
 
+        statusView.setBackground(statusBackground);
+        card.addView(statusView);
 
-        // -----------------------------------------------------
-        // ABSENT
-        // -----------------------------------------------------
-
-        else if (
-                status.equalsIgnoreCase(
-                        "Absent"
-                )
-        ) {
-
-            statusBackground.setColor(
-                    Color.rgb(
-                            255,
-                            235,
-                            238
-                    )
-            );
-
-
-            statusView.setTextColor(
-                    Color.rgb(
-                            198,
-                            40,
-                            40
-                    )
-            );
-        }
-
-
-        // -----------------------------------------------------
-        // NOT MARKED
-        // -----------------------------------------------------
-
-        else {
-
-            statusBackground.setColor(
-                    Color.rgb(
-                            245,
-                            245,
-                            245
-                    )
-            );
-
-
-            statusView.setTextColor(
-                    Color.rgb(
-                            84,
-                            110,
-                            122
-                    )
-            );
-        }
-
-
-        statusView.setBackground(
-                statusBackground
-        );
-
-
-        card.addView(
-                statusView
-        );
-
-
-        // -----------------------------------------------------
-        // ADD CARD
-        // -----------------------------------------------------
-
-        llHistoryList.addView(
-                card
-        );
+        llHistoryList.addView(card);
     }
 
-
     // =========================================================
-    // CREATE INFO TEXT
+    // INFO TEXT
     // =========================================================
 
-    private TextView createInfoText(
-            String text) {
+    private TextView createInfoText(String text) {
 
-        TextView textView =
-                new TextView(
-                        this
-                );
+        TextView textView = new TextView(this);
 
-
-        textView.setText(
-                text
-        );
-
-
-        textView.setTextColor(
-                Color.rgb(
-                        84,
-                        110,
-                        122
-                )
-        );
-
-
-        textView.setTextSize(
-                14
-        );
-
-
-        textView.setPadding(
-                0,
-                4,
-                0,
-                0
-        );
-
+        textView.setText(text);
+        textView.setTextColor(Color.rgb(84, 110, 122));
+        textView.setTextSize(14);
+        textView.setPadding(0, dp(4), 0, 0);
 
         return textView;
     }
-
 
     // =========================================================
     // FORMAT DATE
     // =========================================================
 
-    private String formatAttendanceDate(
-            String date) {
+    private String formatAttendanceDate(String date) {
 
         try {
-
             SimpleDateFormat inputFormat =
                     new SimpleDateFormat(
                             "yyyy-MM-dd",
-                            Locale.getDefault()
+                            Locale.US
                     );
-
 
             SimpleDateFormat outputFormat =
                     new SimpleDateFormat(
@@ -1791,51 +1086,34 @@ public class AttendanceRecord extends AppCompatActivity {
                             Locale.getDefault()
                     );
 
+            java.util.Date parsed = inputFormat.parse(date);
 
-            return outputFormat.format(
-                    inputFormat.parse(
-                            date
-                    )
-            );
+            if (parsed != null) {
+                return outputFormat.format(parsed);
+            }
 
-
-        } catch (Exception e) {
-
-            return date;
+        } catch (Exception ignored) {
         }
-    }
 
+        return date;
+    }
 
     // =========================================================
     // STATUS TEXT
     // =========================================================
 
-    private String getStatusText(
-            String status) {
+    private String getStatusText(String status) {
 
-        if (
-                status.equalsIgnoreCase(
-                        "Present"
-                )
-        ) {
-
+        if ("Present".equalsIgnoreCase(status)) {
             return "✓  PRESENT";
         }
 
-
-        if (
-                status.equalsIgnoreCase(
-                        "Absent"
-                )
-        ) {
-
+        if ("Absent".equalsIgnoreCase(status)) {
             return "✕  ABSENT";
         }
 
-
         return "○  NOT MARKED";
     }
-
 
     // =========================================================
     // RESET SUMMARY
@@ -1843,61 +1121,43 @@ public class AttendanceRecord extends AppCompatActivity {
 
     private void resetSummary() {
 
-        tvHistoryTotal.setText(
-                "0"
-        );
-
-
-        tvHistoryPresent.setText(
-                "0"
-        );
-
-
-        tvHistoryAbsent.setText(
-                "0"
-        );
-
-
-        tvHistoryRate.setText(
-                "0%"
-        );
-
-
-        tvHistoryNotMarked.setText(
-                "Not Marked: 0"
-        );
+        tvHistoryTotal.setText("0");
+        tvHistoryPresent.setText("0");
+        tvHistoryAbsent.setText("0");
+        tvHistoryRate.setText("0%");
+        tvHistoryNotMarked.setText("Not Marked: 0");
     }
-
 
     // =========================================================
     // SHOW MESSAGE
     // =========================================================
 
-    private void showMessage(
-            String message) {
+    private void showMessage(String message) {
 
-        tvHistoryMessage.setText(
-                message
-        );
-
-
+        tvHistoryMessage.setVisibility(View.VISIBLE);
+        tvHistoryMessage.setText(message);
         tvHistoryMessage.setTextColor(
-                Color.rgb(
-                        84,
-                        110,
-                        122
-                )
+                Color.rgb(84, 110, 122)
         );
 
-
-        tvHistoryResultCount.setText(
-                "No results"
-        );
-
-
+        tvHistoryResultCount.setText("No results");
         llHistoryList.removeAllViews();
     }
 
+    // =========================================================
+    // DP HELPER
+    // =========================================================
+
+    private int dp(int value) {
+
+        return (int) (
+                value
+                        * getResources()
+                        .getDisplayMetrics()
+                        .density
+                        + 0.5f
+        );
+    }
 
     // =========================================================
     // ON DESTROY
@@ -1907,7 +1167,6 @@ public class AttendanceRecord extends AppCompatActivity {
     protected void onDestroy() {
 
         super.onDestroy();
-
-        executorService.shutdown();
+        executorService.shutdownNow();
     }
 }
