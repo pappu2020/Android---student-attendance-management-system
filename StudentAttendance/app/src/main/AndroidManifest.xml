@@ -4,6 +4,7 @@
 
     <!-- Internet permission for PHP/MySQL API -->
     <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.CAMERA" />
 
     <application
         android:allowBackup="true"
@@ -92,6 +93,11 @@
 
         <activity
             android:name=".TeacherListActivity"
+            android:exported="false" />
+
+
+        <activity
+            android:name=".FaceAttendanceActivity"
             android:exported="false" />
 
 

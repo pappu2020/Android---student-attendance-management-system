@@ -1,0 +1,127 @@
+
+
+<ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="#F4F7FB"
+    android:fillViewport="true">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:padding="20dp">
+
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="Face Attendance"
+            android:textColor="#172B4D"
+            android:textSize="26sp"
+            android:textStyle="bold" />
+
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="6dp"
+            android:text="Select class and section, then scan one student at a time."
+            android:textColor="#65758B"
+            android:textSize="14sp" />
+
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="22dp"
+            android:text="Class"
+            android:textColor="#172B4D"
+            android:textStyle="bold" />
+
+        <EditText
+            android:id="@+id/etFaceClass"
+            android:layout_width="match_parent"
+            android:layout_height="52dp"
+            android:layout_marginTop="8dp"
+            android:background="#FFFFFF"
+            android:hint="Enter class or semester"
+            android:inputType="textCapWords"
+            android:paddingHorizontal="14dp"
+            android:singleLine="true"
+            android:textColor="#172B4D"
+            android:textColorHint="#8795A8" />
+
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="16dp"
+            android:text="Section"
+            android:textColor="#172B4D"
+            android:textStyle="bold" />
+
+        <EditText
+            android:id="@+id/etFaceSection"
+            android:layout_width="match_parent"
+            android:layout_height="52dp"
+            android:layout_marginTop="8dp"
+            android:background="#FFFFFF"
+            android:hint="Enter section"
+            android:inputType="textCapCharacters"
+            android:paddingHorizontal="14dp"
+            android:singleLine="true"
+            android:textColor="#172B4D"
+            android:textColorHint="#8795A8" />
+
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="22dp"
+            android:text="Live Camera"
+            android:textColor="#172B4D"
+            android:textSize="18sp"
+            android:textStyle="bold" />
+
+        <FrameLayout
+            android:layout_width="match_parent"
+            android:layout_height="340dp"
+            android:layout_marginTop="12dp"
+            android:background="#17202E">
+
+            <androidx.camera.view.PreviewView
+                android:id="@+id/faceCameraPreview"
+                android:layout_width="match_parent"
+                android:layout_height="match_parent" />
+
+            <com.example.studentattendance.FaceOverlayView
+                android:id="@+id/faceOverlay"
+                android:layout_width="match_parent"
+                android:layout_height="match_parent" />
+
+        </FrameLayout>
+
+        <TextView
+            android:id="@+id/tvFaceCameraStatus"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="12dp"
+            android:gravity="center"
+            android:text="Camera is stopped"
+            android:textColor="#52647A"
+            android:textSize="14sp" />
+
+        <Button
+            android:id="@+id/btnStartFaceCamera"
+            android:layout_width="match_parent"
+            android:layout_height="54dp"
+            android:layout_marginTop="16dp"
+            android:text="Start Camera"
+            android:textAllCaps="false" />
+
+        <Button
+            android:id="@+id/btnStopFaceCamera"
+            android:layout_width="match_parent"
+            android:layout_height="54dp"
+            android:layout_marginTop="8dp"
+            android:text="Stop Camera"
+            android:textAllCaps="false" />
+
+    </LinearLayout>
+</ScrollView>

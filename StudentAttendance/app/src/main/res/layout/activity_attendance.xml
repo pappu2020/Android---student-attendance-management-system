@@ -5,8 +5,6 @@
     android:orientation="vertical"
     android:background="#F5F7FB">
 
-    <!-- HEADER -->
-
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
@@ -35,8 +33,6 @@
 
     </LinearLayout>
 
-    <!-- SCROLLABLE CONTENT -->
-
     <ScrollView
         android:layout_width="match_parent"
         android:layout_height="0dp"
@@ -50,8 +46,6 @@
             android:orientation="vertical"
             android:paddingBottom="12dp">
 
-            <!-- FILTER CARD -->
-
             <LinearLayout
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
@@ -61,8 +55,6 @@
                 android:padding="16dp"
                 android:orientation="vertical"
                 android:background="@drawable/bg_attendance_card">
-
-                <!-- CLASS -->
 
                 <TextView
                     android:layout_width="match_parent"
@@ -79,8 +71,6 @@
                     android:layout_marginTop="6dp"
                     android:background="@drawable/bg_spinner"/>
 
-                <!-- SECTION -->
-
                 <TextView
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
@@ -96,8 +86,6 @@
                     android:layout_height="50dp"
                     android:layout_marginTop="6dp"
                     android:background="@drawable/bg_spinner"/>
-
-                <!-- TIME / PERIOD -->
 
                 <TextView
                     android:layout_width="match_parent"
@@ -116,8 +104,6 @@
                     android:background="@drawable/bg_spinner"
                     android:enabled="false"/>
 
-                <!-- SUBJECT -->
-
                 <TextView
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
@@ -134,8 +120,6 @@
                     android:layout_marginTop="6dp"
                     android:background="@drawable/bg_spinner"
                     android:enabled="false"/>
-
-                <!-- ASSIGNED / ATTENDANCE TEACHER -->
 
                 <TextView
                     android:layout_width="match_parent"
@@ -159,8 +143,6 @@
                     android:textColor="#777777"
                     android:textSize="15sp"
                     android:background="@drawable/bg_spinner"/>
-
-                <!-- ATTENDANCE DATE -->
 
                 <TextView
                     android:layout_width="match_parent"
@@ -202,8 +184,6 @@
                 </LinearLayout>
 
             </LinearLayout>
-
-            <!-- ATTENDANCE SUMMARY -->
 
             <LinearLayout
                 android:layout_width="match_parent"
@@ -247,8 +227,6 @@
                     android:layout_marginTop="14dp"
                     android:orientation="horizontal">
 
-                    <!-- PRESENT -->
-
                     <LinearLayout
                         android:layout_width="0dp"
                         android:layout_height="wrap_content"
@@ -273,8 +251,6 @@
                             android:textSize="12sp"/>
 
                     </LinearLayout>
-
-                    <!-- ABSENT -->
 
                     <LinearLayout
                         android:layout_width="0dp"
@@ -305,7 +281,24 @@
 
             </LinearLayout>
 
-            <!-- STUDENT LIST TITLE -->
+            <!-- NEW FACE ATTENDANCE BUTTON -->
+
+            <Button
+                android:id="@+id/btnScanFace"
+                android:layout_width="match_parent"
+                android:layout_height="54dp"
+                android:layout_marginStart="14dp"
+                android:layout_marginTop="14dp"
+                android:layout_marginEnd="14dp"
+                android:backgroundTint="#5E35B1"
+                android:drawableStart="@android:drawable/ic_menu_camera"
+                android:drawablePadding="10dp"
+                android:paddingStart="20dp"
+                android:paddingEnd="20dp"
+                android:text="SCAN FACE"
+                android:textColor="@android:color/white"
+                android:textSize="15sp"
+                android:textStyle="bold"/>
 
             <TextView
                 android:layout_width="match_parent"
@@ -317,8 +310,6 @@
                 android:textColor="#424242"
                 android:textSize="14sp"
                 android:textStyle="bold"/>
-
-            <!-- DYNAMIC STUDENT LIST -->
 
             <LinearLayout
                 android:id="@+id/llAttendanceList"
@@ -333,8 +324,6 @@
         </LinearLayout>
 
     </ScrollView>
-
-    <!-- FIXED SAVE BUTTON -->
 
     <LinearLayout
         android:layout_width="match_parent"

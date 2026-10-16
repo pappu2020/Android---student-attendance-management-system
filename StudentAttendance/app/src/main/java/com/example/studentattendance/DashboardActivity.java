@@ -70,6 +70,10 @@ public class DashboardActivity extends AppCompatActivity {
 
     private SwipeRefreshLayout swipeRefreshDashboard;
 
+
+
+
+    private LinearLayout btnFaceAttendance;
     private BarChart chartAttendance;
     private BarChart chartWeeklyAttendance;
 
@@ -275,6 +279,11 @@ public class DashboardActivity extends AppCompatActivity {
 
 
 
+        //Face
+        btnFaceAttendance = findViewById(R.id.btnFaceAttendance);
+
+
+
     }
 
     // ------------------------------------------------------------
@@ -405,6 +414,29 @@ public class DashboardActivity extends AppCompatActivity {
     // ------------------------------------------------------------
 
     private void setupMenuListeners() {
+
+
+        btnFaceAttendance.setOnClickListener(v -> {
+            if (!isAdmin()) {
+                Toast.makeText(
+                        DashboardActivity.this,
+                        "Only Admin can access Face Attendance.",
+                        Toast.LENGTH_SHORT
+                ).show();
+                return;
+            }
+
+            startActivity(
+                    new Intent(
+                            DashboardActivity.this,
+                            FaceAttendanceActivity.class
+                    )
+            );
+        });
+
+
+
+
 
         // Student Management: Admin only
         btnStudents.setOnClickListener(view -> {
@@ -589,6 +621,13 @@ public class DashboardActivity extends AppCompatActivity {
         startActivity(intent);
         finish();
     }
+
+
+
+
+
+
+
 
     // ------------------------------------------------------------
     // ATTENDANCE DATE PICKER
